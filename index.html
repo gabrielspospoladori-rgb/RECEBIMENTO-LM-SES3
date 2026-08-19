@@ -1185,23 +1185,49 @@ function ghUrl() {
   return 'https://api.github.com/repos/' + (cfg.repo || '') + '/contents/' + (cfg.file || 'data.json');
 }
 
+function ghRawUrl() {
+  var repo = (cfg.repo || '').replace(/^\/+|\/+$/g, '');
+  var file = (cfg.file || 'data.json').replace(/^\/+/, '');
+  return 'https://raw.githubusercontent.com/' + repo + '/main/' + file + '?t=' + Date.now();
+}
+
+function validateRemoteData(data) {
+  if (!data || typeof data !== 'object') throw new Error('Formato de dados invalido');
+  if (Array.isArray(data)) return true;
+  var fields = ['pkgs', 'nexSessions', 'faltanteReg', 'voandoReg'];
+  for (var i = 0; i < fields.length; i++) {
+    if (typeof data[fields[i]] !== 'undefined' && !Array.isArray(data[fields[i]])) {
+      throw new Error('Campo remoto invalido: ' + fields[i]);
+    }
+  }
+  return true;
+}
+
 function doSync() {
-  if (!cfg.token) { setSyncUI('nocfg'); return Promise.resolve(); }
   var key = sessionStorage.getItem(SESSION_KEY2) || '';
+  var hasToken = !!cfg.token;
+  var url = hasToken ? ghUrl() : ghRawUrl();
+  var options = hasToken ? { headers: ghHeaders(), cache: 'no-store' } : { cache: 'no-store' };
   setSyncUI('spin');
-  return fetch(ghUrl(), { headers: ghHeaders() })
+  return fetch(url, options)
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
-      var decoded = atob(f.content.replace(/\n/g, ''));
-      var file = JSON.parse(decoded);
+      var file = f;
+      if (hasToken) {
+        if (!f.content) throw new Error('Arquivo remoto sem conteudo');
+        file = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
+      }
       var data;
       if (file.enc && key) {
-        try { data = JSON.parse(decryptData(file.enc, key)); } catch(e) { data = {}; }
+        data = JSON.parse(decryptData(file.enc, key));
+      } else if (file.enc && !key) {
+        throw new Error('Chave da sessao ausente. Entre novamente.');
       } else if (Array.isArray(file)) {
         data = file;
       } else {
         data = file;
       }
+      validateRemoteData(data);
       if (Array.isArray(data)) {
         pkgs = data;
         localStorage.setItem('pkg_data', JSON.stringify(pkgs));
@@ -1215,10 +1241,16 @@ function doSync() {
         localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg));
         localStorage.setItem('voando_reg',   JSON.stringify(voandoReg));
       }
-      setSyncUI('ok');
+      setSyncUI(hasToken ? 'ok' : 'readonly');
       refreshAll();
+      return true;
     })
-    .catch(function(e) { console.warn('Sync error:', e); setSyncUI('err'); });
+    .catch(function(e) {
+      console.warn('Sync error:', e);
+      setSyncUI('err');
+      showSaveError('Falha ao sincronizar. Os dados deste dispositivo foram preservados.');
+      return false;
+    });
 }
 
 function showSaveError(msg) {
@@ -1229,10 +1261,12 @@ function showSaveError(msg) {
   setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 5000);
 }
 
-function saveGH() {
-  if (!cfg.token) { showSaveError('Token nao configurado. Abra as configuracoes.'); return Promise.resolve(); }
+var saveQueue = Promise.resolve();
+
+function saveGHAttempt(retryCount) {
   var key = sessionStorage.getItem(SESSION_KEY2) || '';
-  return fetch(ghUrl(), { headers: ghHeaders() })
+  if (!key) return Promise.reject(new Error('Sessao expirada. Entre novamente.'));
+  return fetch(ghUrl(), { headers: ghHeaders(), cache: 'no-store' })
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
       var sha = f.sha;
@@ -1253,8 +1287,16 @@ function saveGH() {
       });
     })
     .then(function(r) {
-      if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ' ' + t); }); }
+      if ((r.status === 409 || r.status === 422) && retryCount < 1) return saveGHAttempt(retryCount + 1);
+      if (!r.ok) { return r.text().then(function() { throw new Error('HTTP ' + r.status); }); }
+      return true;
     });
+}
+
+function saveGH() {
+  if (!cfg.token) return Promise.reject(new Error('Token nao configurado. Dados salvos apenas neste dispositivo.'));
+  saveQueue = saveQueue.catch(function() {}).then(function() { return saveGHAttempt(0); });
+  return saveQueue;
 }
 
 function persist() {
@@ -1279,6 +1321,7 @@ function setSyncUI(state) {
   if (state === 'ok')     { dot.className = 'sync-dot ok';   txt.textContent = '☁ Sincronizado'; }
   if (state === 'err')    { dot.className = 'sync-dot err';  txt.textContent = 'Offline (local)'; }
   if (state === 'nocfg')  { dot.className = 'sync-dot err';  txt.textContent = '⚙ Não configurado'; }
+  if (state === 'readonly'){ dot.className = 'sync-dot ok';   txt.textContent = '☁ Atualizado (somente leitura)'; }
 }
 
 /* ===================================================================
@@ -1321,12 +1364,8 @@ function appInit() {
   // Update achados badge on load
   updateAchadosBadge();
 
-  // Sync with GitHub
-  if (cfg.token) {
-    doSync();
-  } else {
-    setSyncUI('nocfg');
-  }
+  // Sync with GitHub. Sem token, usa o arquivo publico em modo somente leitura.
+  doSync();
 }
 
 window.addEventListener('DOMContentLoaded', function() {
