@@ -2464,11 +2464,10 @@ function processPhotoScan(input) {
 function openCamera() {
   if (camRunning) { closeCamera(); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert('Camera not supported. Use Safari (iOS 14+) or Chrome (Android).');
+    alert('Camera nao suportada. Use Safari iOS 14+ ou Chrome Android.');
     return;
   }
   document.getElementById('camModal').style.display = 'flex';
-  switchTab('live');
   camStatus('Abrindo camera...', '');
 
   if (!window.ZXing) {
@@ -2478,65 +2477,49 @@ function openCamera() {
   }
 
   if (zxingReader) {
-    try { if (zxingControls) { zxingControls.stop(); zxingControls = null; } zxingReader.reset(); } catch(e) {}
+    try { zxingReader.reset(); } catch(e) {}
     zxingReader = null;
   }
+  zxingControls = null;
 
   zxingReader = new ZXing.BrowserMultiFormatReader();
 
-  zxingReader.listVideoInputDevices().then(function(devices) {
-    if (!devices || devices.length === 0) {
-      camStatus('Nenhuma camera encontrada', 'err');
-      return;
+  var constraints = { video: { facingMode: { ideal: camFacingMode }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+
+  camRunning = true;
+  camStatus('Aponte para o codigo de barras', '');
+
+  var btn = document.getElementById('cam-btn');
+  if (btn) btn.classList.add('active');
+
+  zxingReader.decodeFromConstraints(constraints, 'cam-video', function(result, err) {
+    if (result) {
+      var text = result.getText();
+      var now = Date.now();
+      if (text === lastScanned && (now - lastScannedTime) < 3000) return;
+      lastScanned = text;
+      lastScannedTime = now;
+
+      var flash = document.getElementById('cam-result-flash');
+      if (flash) { flash.style.opacity = '1'; setTimeout(function() { flash.style.opacity = '0'; }, 400); }
+      if (navigator.vibrate) { navigator.vibrate([80, 40, 80]); }
+      camStatus('Lido: ' + text, 'ok');
+
+      setTimeout(function() {
+        closeCamera();
+        var inp = document.getElementById('scanInput');
+        if (inp) { inp.value = text; }
+        processScan(text);
+      }, 400);
     }
-
-    // Pick back camera: prefer label with 'back', 'rear', 'traseira', else last device
-    var deviceId = devices[0].deviceId;
-    if (camFacingMode === 'environment') {
-      for (var i = 0; i < devices.length; i++) {
-        var lbl = (devices[i].label || '').toLowerCase();
-        if (lbl.indexOf('back') >= 0 || lbl.indexOf('rear') >= 0 || lbl.indexOf('traseira') >= 0 || lbl.indexOf('environment') >= 0) {
-          deviceId = devices[i].deviceId;
-          break;
-        }
-      }
-      // On iOS, last device is usually the back camera
-      if (devices.length > 1) deviceId = devices[devices.length - 1].deviceId;
-    } else {
-      // front camera: first device is usually front
-      deviceId = devices[0].deviceId;
-    }
-
-    camRunning = true;
-    camStatus('Aponte para o codigo de barras', '');
-
-    zxingReader.decodeFromVideoDevice(deviceId, 'cam-video', function(result, err) {
-      if (result) {
-        var text = result.getText();
-        var now = Date.now();
-        if (text === lastScanned && (now - lastScannedTime) < 3000) return;
-        lastScanned = text;
-        lastScannedTime = now;
-
-        var flash = document.getElementById('cam-result-flash');
-        if (flash) { flash.style.opacity = '1'; setTimeout(function() { flash.style.opacity = '0'; }, 400); }
-        if (navigator.vibrate) { navigator.vibrate([80, 40, 80]); }
-
-        camStatus('Lido: ' + text, 'ok');
-
-        setTimeout(function() {
-          closeCamera();
-          var inp = document.getElementById('scanInput');
-          if (inp) { inp.value = text; }
-          processScan(text);
-        }, 400);
-      }
-      // ignore NotFoundException - it fires on every frame with no barcode
-    });
-
+    // NotFoundException fires on every empty frame — ignore it
+  }).then(function(controls) {
+    zxingControls = controls;
   }).catch(function(err) {
     camRunning = false;
-    camStatus('Erro ao acessar camera: ' + err, 'err');
+    camStatus('Erro ao abrir camera: ' + (err.message || err), 'err');
+    var btn2 = document.getElementById('cam-btn');
+    if (btn2) btn2.classList.remove('active');
   });
 }
 
@@ -2551,17 +2534,15 @@ function closeCamera() {
     zxingReader = null;
   }
   var modal = document.getElementById('camModal');
-  if (modal) { modal.style.display = 'none'; }
+  if (modal) modal.style.display = 'none';
   var btn = document.getElementById('cam-btn');
-  if (btn) { btn.classList.remove('active'); }
+  if (btn) btn.classList.remove('active');
 }
 
 function switchCamera() {
   camFacingMode = camFacingMode === 'environment' ? 'user' : 'environment';
-  if (camRunning) {
-    closeCamera();
-    setTimeout(function() { openCamera(); }, 400);
-  }
+  closeCamera();
+  setTimeout(function() { openCamera(); }, 500);
 }
 
 // ── NEX ──────────────────────────────────────────────────────────
@@ -2883,17 +2864,35 @@ function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(
 
 function previewVoaPhoto(input) {
   if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
   var reader = new FileReader();
   reader.onload = function(e) {
-    voaPhotoData = e.target.result;
-    var prev = document.getElementById('voa-photo-preview');
-    var img  = document.getElementById('voa-photo-img');
-    var nm   = document.getElementById('voa-photo-name');
-    if (img) img.src = voaPhotoData;
-    if (prev) prev.style.display = 'block';
-    if (nm) nm.textContent = input.files[0].name;
+    var img = new Image();
+    img.onload = function() {
+      // Compress: max 400px wide/tall, JPEG 0.5
+      var maxDim = 400;
+      var w = img.width;
+      var h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else       { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      voaPhotoData = canvas.toDataURL('image/jpeg', 0.5);
+
+      var prevImg = document.getElementById('voa-photo-img');
+      var prevDiv = document.getElementById('voa-photo-preview');
+      var nm      = document.getElementById('voa-photo-name');
+      if (prevImg) prevImg.src = voaPhotoData;
+      if (prevDiv) prevDiv.style.display = 'block';
+      if (nm)      nm.textContent = file.name + ' (comprimido)';
+    };
+    img.src = e.target.result;
   };
-  reader.readAsDataURL(input.files[0]);
+  reader.readAsDataURL(file);
 }
 
 function initVoandoReg() {
