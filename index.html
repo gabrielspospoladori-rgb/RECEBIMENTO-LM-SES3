@@ -1,0 +1,2091 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recebimento de Pacotes | Última Milha</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F0F2F5;color:#1C1C1E;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* TOPBAR */
+.topbar{
+  height:54px;background:#FFE600;border-bottom:3px solid #d4bf00;
+  display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;
+  position:relative;z-index:300;
+}
+.tlogo{height:28px;flex-shrink:0}
+.tsep{width:1px;height:26px;background:rgba(0,0,0,0.2);flex-shrink:0}
+.ttitle{display:flex;flex-direction:column;flex-shrink:0}
+.ttitle-main{font-size:0.82rem;font-weight:900;color:#1C1C1E;line-height:1.2}
+.ttitle-sub{font-size:0.58rem;color:rgba(0,0,0,0.55);font-weight:600}
+/* Scanner */
+.scan-wrap{display:flex;align-items:center;gap:6px;flex:1;min-width:0;margin-left:8px}
+.scan-inp{
+  flex:1;max-width:300px;padding:6px 10px 6px 32px;border-radius:7px;
+  border:2px solid rgba(0,0,0,0.25);background:#fff;font-size:0.85rem;font-weight:700;
+  font-family:inherit;color:#1C1C1E;
+}
+.scan-inp:focus{outline:none;border-color:#1C1C1E;box-shadow:0 0 0 2px rgba(0,0,0,0.1)}
+.scan-ico{position:relative;margin-right:-26px;font-size:0.8rem;z-index:1;pointer-events:none;margin-left:4px}
+.meta-inp{
+  width:120px;padding:5px 8px;border-radius:7px;border:1.5px solid rgba(0,0,0,0.2);
+  background:rgba(255,255,255,0.7);font-size:0.75rem;font-family:inherit;color:#1C1C1E;
+}
+.meta-inp:focus{outline:none;border-color:#1C1C1E;background:#fff}
+.meta-inp.short{width:85px;text-transform:uppercase}
+.scan-btn{
+  background:#1C1C1E;color:#FFE600;border:none;border-radius:7px;padding:6px 14px;
+  font-size:0.8rem;font-weight:900;cursor:pointer;white-space:nowrap;font-family:inherit;
+  display:flex;align-items:center;gap:5px;flex-shrink:0;
+}
+.scan-btn:hover{background:#333}
+.scan-btn:active{transform:scale(0.97)}
+.cam-btn{
+  background:#3483FA;color:#fff;border:none;border-radius:7px;padding:6px 12px;
+  font-size:0.8rem;font-weight:900;cursor:pointer;white-space:nowrap;font-family:inherit;
+  display:flex;align-items:center;gap:5px;flex-shrink:0;
+}
+.cam-btn:hover{background:#1a6fe8}
+.cam-btn.active{background:#e53935}
+
+/* Camera modal */
+#camModal .modal{background:#111;border-radius:16px;padding:0;overflow:hidden;max-width:420px;width:100%}
+#cam-header{background:#FFE600;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+#cam-header h3{font-size:0.85rem;font-weight:900;color:#1C1C1E;margin:0}
+#cam-close-btn{background:rgba(0,0,0,0.15);border:none;border-radius:6px;padding:4px 10px;font-size:0.8rem;cursor:pointer;font-weight:700}
+#cam-viewport{width:100%;background:#000;position:relative;min-height:280px;display:flex;align-items:center;justify-content:center}
+#cam-viewport video{width:100%;display:block}
+/* Scanning crosshair overlay */
+#cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.cam-frame{width:200px;height:120px;border:3px solid #FFE600;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.45);position:relative}
+.cam-corner{position:absolute;width:20px;height:20px;border-color:#FFE600;border-style:solid}
+.cam-corner.tl{top:-3px;left:-3px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
+.cam-corner.tr{top:-3px;right:-3px;border-width:3px 3px 0 0;border-radius:0 4px 0 0}
+.cam-corner.bl{bottom:-3px;left:-3px;border-width:0 0 3px 3px;border-radius:0 0 0 4px}
+.cam-corner.br{bottom:-3px;right:-3px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:rgba(255,230,0,0.8);animation:scanline 2s ease-in-out infinite;top:50%}
+@keyframes scanline{0%,100%{top:10%}50%{top:90%}}
+#cam-status{background:#111;color:#9CA3AF;font-size:0.72rem;text-align:center;padding:10px 16px;font-weight:600;min-height:38px;display:flex;align-items:center;justify-content:center}
+#cam-status.ok{color:#00a650}
+#cam-status.err{color:#e53935}
+#cam-footer{background:#1a1a1a;padding:10px 16px;display:flex;gap:8px}
+.cam-fbtn{flex:1;background:#333;border:1px solid #444;border-radius:8px;padding:8px;font-size:0.75rem;font-weight:700;color:#fff;cursor:pointer;font-family:inherit}
+.cam-fbtn:hover{background:#444}
+.cam-fbtn.primary{background:#FFE600;color:#1C1C1E;border-color:#d4bf00}
+.cam-fbtn.primary:hover{background:#d4bf00}
+#cam-result-flash{position:absolute;inset:0;background:rgba(0,166,80,0.3);opacity:0;border-radius:4px;transition:opacity .2s;pointer-events:none}
+.scan-fb{font-size:0.7rem;font-weight:700;color:#065f46;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+/* Topbar right */
+.tright{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.sync-pill{
+  display:flex;align-items:center;gap:5px;background:rgba(0,0,0,0.1);
+  border-radius:20px;padding:4px 10px;font-size:0.65rem;font-weight:700;color:#1C1C1E;
+  cursor:pointer;border:1px solid rgba(0,0,0,0.15);
+}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#ccc;flex-shrink:0}
+.sync-dot.ok{background:#00a650}
+.sync-dot.err{background:#e53935}
+.sync-dot.spin{background:#3483FA;animation:spin 1s infinite}
+@keyframes spin{0%,100%{opacity:1}50%{opacity:.25}}
+.cfg-btn{background:rgba(0,0,0,0.1);border:1px solid rgba(0,0,0,0.15);border-radius:7px;padding:4px 8px;font-size:0.8rem;cursor:pointer}
+.cfg-btn:hover{background:rgba(0,0,0,0.18)}
+
+/* LAYOUT */
+.body-wrap{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{
+  width:210px;background:#fff;border-right:1px solid #E5E7EB;
+  display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;
+}
+/* KPI cards */
+.kpi-list{padding:12px 10px;border-bottom:1px solid #F0F2F5;display:flex;flex-direction:column;gap:8px}
+.kpi-card{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:1.5px solid #E5E7EB;background:#FAFAFA;cursor:pointer;transition:border-color .15s}
+.kpi-card:hover{border-color:#d4bf00}
+.kpi-card.active{border-color:#FFE600;background:#FFFDE7}
+.kpi-card.c-green{border-color:#a7f3d0;background:#F0FDF4}
+.kpi-card.c-amber{border-color:#fde68a;background:#FFFBEB}
+.kpi-card.c-red  {border-color:#fca5a5;background:#FEF2F2}
+.kpi-card.c-blue {border-color:#93c5fd;background:#EFF6FF}
+.kpi-card.c-gray {border-color:#d1d5db;background:#F9FAFB}
+.kpi-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.kpi-icon.i-y{background:#FFE600}
+.kpi-icon.i-g{background:#D1FAE5}
+.kpi-icon.i-a{background:#FEF3C7}
+.kpi-icon.i-r{background:#FEE2E2}
+.kpi-icon.i-b{background:#DBEAFE}
+.kpi-icon.i-k{background:#E5E7EB}
+.kpi-info{min-width:0}
+.kval{font-size:1.25rem;font-weight:900;line-height:1;color:#1C1C1E}
+.kval.g{color:#065f46}.kval.a{color:#92400e}.kval.r{color:#991b1b}.kval.b{color:#1d4ed8}.kval.k{color:#6B7280}
+.klbl{font-size:0.58rem;font-weight:700;text-transform:uppercase;color:#9CA3AF;letter-spacing:.3px}
+
+/* Nav */
+.nav-sect{padding:10px 12px 4px;font-size:0.58rem;font-weight:700;text-transform:uppercase;color:#9CA3AF;letter-spacing:.5px}
+.nav-btn{
+  display:flex;align-items:center;gap:8px;width:calc(100% - 12px);margin:1px 6px;padding:8px 10px;
+  border-radius:8px;background:none;border:none;font-size:0.82rem;font-weight:600;
+  color:#374151;cursor:pointer;text-align:left;font-family:inherit;transition:all .15s;
+}
+.nav-btn:hover{background:#F0F2F5;color:#1C1C1E}
+.nav-btn.active{background:#FFE600;color:#1C1C1E;font-weight:800}
+.nav-ico{width:20px;text-align:center;font-size:0.9rem;flex-shrink:0}
+.nbadge{margin-left:auto;background:#e53935;color:#fff;border-radius:10px;font-size:0.58rem;font-weight:800;padding:1px 6px;min-width:16px;text-align:center}
+.nbadge.amber{background:#f59e0b;color:#1C1C1E}
+.nbadge.green{background:#00a650}
+.nbadge.hide{display:none}
+
+/* Progress */
+.sb-footer{padding:12px 10px;margin-top:auto;border-top:1px solid #F0F2F5}
+.prog-row{display:flex;justify-content:space-between;font-size:0.65rem;font-weight:600;color:#6B7280;margin-bottom:5px}
+.prog-pct{color:#00a650;font-weight:800}
+.prog-track{height:7px;background:#E5E7EB;border-radius:10px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,#00a650,#34d399);border-radius:10px;transition:width .6s ease}
+.prog-sub{display:flex;justify-content:space-between;font-size:0.58rem;color:#9CA3AF;margin-top:3px}
+
+/* MAIN */
+.main{flex:1;overflow-y:auto;padding:16px}
+
+/* Page header */
+.ph{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px}
+.ph-info{flex:1}
+.ph-title{font-size:1rem;font-weight:900;color:#1C1C1E}
+.ph-sub{font-size:0.68rem;color:#9CA3AF;margin-top:2px}
+.ph-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Alert banner */
+.alert-banner{background:#FEF2F2;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;color:#991b1b;font-weight:600;display:flex;align-items:center;gap:8px}
+
+/* Table card */
+.tcard{background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.ttbar{display:flex;align-items:center;padding:10px 14px;gap:8px;border-bottom:1px solid #F0F2F5;flex-wrap:wrap}
+.tt-title{font-size:0.84rem;font-weight:800;color:#1C1C1E;display:flex;align-items:center;gap:7px}
+.tt-chip{background:#FFE600;color:#1C1C1E;border-radius:20px;font-size:0.63rem;font-weight:800;padding:2px 8px}
+.tt-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fi{border:1.5px solid #E5E7EB;border-radius:7px;padding:5px 9px;font-size:0.75rem;background:#F9FAFB;color:#1C1C1E;font-family:inherit}
+.fi:focus{outline:none;border-color:#3483FA}
+.fi[type=date]{width:126px}
+.fi.wide{width:160px}
+.fbtn{background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:7px;padding:5px 11px;font-size:0.75rem;font-weight:700;color:#374151;cursor:pointer;font-family:inherit;white-space:nowrap}
+.fbtn:hover{border-color:#3483FA;color:#3483FA}
+.fbtn.prim{background:#FFE600;border-color:#d4bf00;color:#1C1C1E}
+.fbtn.prim:hover{background:#d4bf00}
+.fbtn.danger{border-color:rgba(229,57,53,.3);color:#e53935}
+.fbtn.danger:hover{background:rgba(229,57,53,.06)}
+
+/* Table */
+.dt{width:100%;border-collapse:collapse;font-size:0.8rem}
+.dt thead tr{background:#FAFAFA;border-bottom:2px solid #E5E7EB}
+.dt th{padding:9px 12px;text-align:left;font-size:0.62rem;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.dt tbody tr{border-bottom:1px solid #F4F5F7;transition:background .1s}
+.dt tbody tr:hover{background:#FFFDE7}
+.dt tbody tr:last-child{border:none}
+.dt td{padding:9px 12px;vertical-align:middle}
+.dt td.mono{font-family:'Courier New',monospace;font-weight:700;font-size:0.82rem;color:#1C1C1E}
+.dt td.right{text-align:right}
+.dt td.center{text-align:center}
+.row-alert   td{background:#FFF5F5!important}
+.row-rec     td{background:#F0FDF4!important}
+.row-voando  td{background:#EFF6FF!important}
+.row-faltante td{background:#F9FAFB!important}
+
+/* Status badges */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:0.65rem;font-weight:800;white-space:nowrap}
+.badge.pend    {background:#FFFBEB;color:#92400e;border:1px solid #fde68a}
+.badge.recv    {background:#F0FDF4;color:#065f46;border:1px solid #a7f3d0}
+.badge.alert   {background:#FEF2F2;color:#991b1b;border:1px solid #fca5a5;animation:blink 1.4s ease-in-out infinite}
+.badge.voando  {background:#EFF6FF;color:#1d4ed8;border:1px solid #93c5fd;animation:fly 2s ease-in-out infinite}
+.badge.faltante{background:#F3F4F6;color:#374151;border:1px solid #9CA3AF}
+@keyframes blink{0%,100%{opacity:1}60%{opacity:.4}}
+@keyframes fly  {0%,100%{transform:translateX(0)}50%{transform:translateX(3px)}}
+.badge.lm{background:rgba(52,131,250,.1);color:#1a56db;border:1px solid rgba(52,131,250,.3)}
+
+/* Print styles */
+@media print{
+  .topbar,.sidebar,.overlay,.toast,.ph-actions,.ttbar,.abtn,.rsel{display:none!important}
+  body{background:#fff;overflow:auto;height:auto}
+  .body-wrap{display:block}
+  .main{margin:0;padding:10px}
+  .compr-print{display:block!important}
+  .tcard{box-shadow:none;border:1px solid #ccc}
+}
+.compr-print{display:none}
+
+/* Reason select in table */
+.rsel{border:1px solid #E5E7EB;border-radius:6px;padding:3px 5px;font-size:0.7rem;color:#374151;background:#F9FAFB;font-family:inherit;max-width:200px}
+.rsel:focus{outline:none;border-color:#3483FA}
+
+/* Receipt tag */
+.rtag{font-size:0.6rem;font-family:monospace;background:rgba(52,131,250,.1);color:#3483FA;padding:1px 5px;border-radius:4px;display:block;margin-top:2px;white-space:nowrap}
+
+/* Action buttons */
+.abtn{background:none;border:1px solid #E5E7EB;border-radius:6px;padding:3px 8px;font-size:0.72rem;cursor:pointer;font-family:inherit;font-weight:600;transition:all .12s}
+.abtn:hover{border-color:#3483FA;color:#3483FA;background:rgba(52,131,250,.04)}
+.abtn.g:hover{border-color:#00a650;color:#00a650;background:rgba(0,166,80,.05)}
+.abtn.r:hover{border-color:#e53935;color:#e53935;background:rgba(229,57,53,.05)}
+.abtn-wrap{display:flex;gap:4px;justify-content:flex-end}
+
+/* Empty */
+.empty-row td{text-align:center;padding:48px 20px;color:#9CA3AF}
+.empty-ico{font-size:2.5rem;display:block;margin-bottom:8px}
+
+/* Hours badge */
+.hrs-badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:0.72rem;font-weight:800}
+.hrs-badge.ok{background:#FEF3C7;color:#92400e}
+.hrs-badge.danger{background:#FEE2E2;color:#991b1b}
+
+/* Analytics */
+.an-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.an-kpi{background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:12px 14px}
+.an-val{font-size:1.5rem;font-weight:900;color:#1C1C1E}
+.an-lbl{font-size:0.62rem;text-transform:uppercase;color:#9CA3AF;font-weight:700;margin-top:3px;letter-spacing:.3px}
+.an-grid{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:700px){.an-grid{grid-template-columns:1fr}}
+.ch-card{background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:14px}
+.ch-title{font-size:0.8rem;font-weight:800;color:#1C1C1E;margin-bottom:12px}
+.ch-wrap{position:relative;height:200px}
+
+/* Modals */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:none;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:14px;padding:22px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.2);animation:mpop .2s ease}
+@keyframes mpop{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.mhd{font-size:0.9rem;font-weight:900;color:#1C1C1E;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #FFE600;display:flex;align-items:center;gap:7px}
+.mfield{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.mfield label{font-size:0.62rem;font-weight:700;text-transform:uppercase;color:#9CA3AF;letter-spacing:.4px}
+.mfield input,.mfield select{background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;padding:8px 11px;font-size:0.85rem;font-family:inherit;color:#1C1C1E}
+.mfield input:focus{outline:none;border-color:#3483FA}
+.mbody{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;background:#F9FAFB;border-radius:8px;padding:12px;border:1px solid #E5E7EB}
+.mrow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #F0F2F5;font-size:0.82rem}
+.mrow:last-child{border:none}
+.mkey{color:#9CA3AF;font-size:0.72rem}
+.mval{font-weight:700}
+.mft{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.pkg-list{max-height:130px;overflow-y:auto;margin-top:8px}
+.pkg-li{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F2F5;font-size:0.72rem}
+.pkg-li:last-child{border:none}
+.pkg-li .pid{font-family:monospace;font-weight:700}
+.pkg-li .preason{color:#9CA3AF;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.warn-box{background:#FEF2F2;border:1px solid #fca5a5;border-radius:8px;padding:9px 11px;font-size:0.72rem;color:#991b1b;line-height:1.5;margin-bottom:10px}
+.dup-box{text-align:center;padding:8px 0}
+.dup-icon{font-size:2.5rem;margin-bottom:8px}
+.dup-title{font-size:0.95rem;font-weight:800;color:#b45309;margin-bottom:6px}
+.dup-msg{font-size:0.8rem;color:#6B7280;margin-bottom:14px}
+.dup-check{display:flex;align-items:center;gap:8px;cursor:pointer;background:#FFFBEB;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:14px;justify-content:center}
+.pwd-field{text-align:center;letter-spacing:6px;font-size:1.1rem!important}
+
+/* Toast */
+.toast{position:fixed;bottom:18px;right:18px;padding:9px 16px;border-radius:9px;font-weight:700;font-size:0.82rem;transform:translateY(60px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);z-index:9999;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.16)}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.s{background:#00a650;color:#fff}.toast.i{background:#3483FA;color:#fff}
+.toast.d{background:#e53935;color:#fff}.toast.w{background:#f59e0b;color:#1C1C1E}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <img src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.19.1/mercadolibre/logo__large_plus.png"
+       alt="ML" class="tlogo" id="logoImg"
+       onerror="document.getElementById('logoImg').style.display='none';document.getElementById('logoTxt').style.display='block'">
+  <span id="logoTxt" style="display:none;font-weight:900;font-size:1rem;color:#1C1C1E">mercadolivre</span>
+  <div class="tsep"></div>
+  <div class="ttitle">
+    <div class="ttitle-main">📦 Recebimento de Pacotes</div>
+    <div class="ttitle-sub">Controle de Insucessos — Última Milha</div>
+  </div>
+
+  <div class="scan-wrap">
+    <span class="scan-ico">📟</span>
+    <input type="text" id="scanInput" class="scan-inp" placeholder="Bipe o ID do pacote..." autocomplete="off" autofocus>
+    <input type="text" id="defReceiver" class="meta-inp" placeholder="Triador">
+    <input type="text" id="defDriver"   class="meta-inp" placeholder="Motorista">
+    <input type="text" id="defPlate"    class="meta-inp short" placeholder="Placa">
+    <button class="scan-btn" id="scanBtn" onclick="triggerScan()">⚡ Bipar</button>
+    <button class="cam-btn" id="camBtn" onclick="openCamera()" title="Abrir câmera para bipar">📷 Câmera</button>
+    <span id="scanFb" class="scan-fb"></span>
+  </div>
+
+  <div class="tright">
+    <div class="sync-pill" onclick="doSync()" title="Clique para sincronizar">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncTxt">Aguardando...</span>
+    </div>
+    <button class="cfg-btn" onclick="openModal('cfgModal')" title="Configurar GitHub">⚙️</button>
+  </div>
+</div>
+
+<!-- BODY -->
+<div class="body-wrap">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="kpi-list">
+      <div class="kpi-card" onclick="nav('grid')">
+        <div class="kpi-icon i-y">📦</div>
+        <div class="kpi-info"><div class="kval" id="kTotal">0</div><div class="klbl">Total Geral</div></div>
+      </div>
+      <div class="kpi-card c-green" onclick="nav('received')">
+        <div class="kpi-icon i-g">✅</div>
+        <div class="kpi-info"><div class="kval g" id="kRec">0</div><div class="klbl">Recebidos</div></div>
+      </div>
+      <div class="kpi-card c-amber" onclick="nav('pending')">
+        <div class="kpi-icon i-a">⏳</div>
+        <div class="kpi-info"><div class="kval a" id="kPend">0</div><div class="klbl">Pendentes</div></div>
+      </div>
+      <div class="kpi-card c-red" onclick="nav('alert')">
+        <div class="kpi-icon i-r">🚨</div>
+        <div class="kpi-info"><div class="kval r" id="kAlert">0</div><div class="klbl">Alerta +24h</div></div>
+      </div>
+      <div class="kpi-card c-blue" onclick="nav('voando')">
+        <div class="kpi-icon i-b">✈️</div>
+        <div class="kpi-info"><div class="kval b" id="kVoando">0</div><div class="klbl">Pacote Voando</div></div>
+      </div>
+      <div class="kpi-card c-gray" onclick="nav('faltante')">
+        <div class="kpi-icon i-k">❓</div>
+        <div class="kpi-info"><div class="kval k" id="kFaltante">0</div><div class="klbl">Faltante</div></div>
+      </div>
+    </div>
+
+    <div class="nav-sect">Painel</div>
+    <button class="nav-btn active" id="nl-grid"     onclick="nav('grid')">     <span class="nav-ico">📋</span>Todos os Pacotes</button>
+    <button class="nav-btn"        id="nl-pending"  onclick="nav('pending')">  <span class="nav-ico">⏳</span>Pendentes     <span class="nbadge amber hide" id="nb-pend">0</span></button>
+    <button class="nav-btn"        id="nl-alert"    onclick="nav('alert')">    <span class="nav-ico">🚨</span>Alerta +24h   <span class="nbadge hide"       id="nb-alert">0</span></button>
+    <button class="nav-btn"        id="nl-received" onclick="nav('received')"> <span class="nav-ico">✅</span>Recebidos     <span class="nbadge green hide" id="nb-rec">0</span></button>
+    <button class="nav-btn"        id="nl-voando"   onclick="nav('voando')">  <span class="nav-ico">✈️</span>Pacote Voando  <span class="nbadge hide" style="background:#3b82f6" id="nb-voando">0</span></button>
+    <button class="nav-btn"        id="nl-faltante" onclick="nav('faltante')"><span class="nav-ico">❓</span>Faltante       <span class="nbadge hide" style="background:#6B7280" id="nb-faltante">0</span></button>
+    <div class="nav-sect">Análise</div>
+    <button class="nav-btn"        id="nl-analytics" onclick="nav('analytics')"><span class="nav-ico">📊</span>Gráficos</button>
+
+    <div class="sb-footer">
+      <div class="prog-row"><span>Resolução</span><span class="prog-pct" id="progPct">0%</span></div>
+      <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+      <div class="prog-sub"><span id="progRec">0 recebidos</span><span id="progPend">0 pend.</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- VIEW: TODOS -->
+    <div id="view-grid">
+      <div class="ph">
+        <div class="ph-info"><div class="ph-title">Todos os Pacotes</div><div class="ph-sub">Visão completa de bipagens e pendentes</div></div>
+        <div class="ph-actions">
+          <button class="fbtn prim" onclick="openAddPending()">+ Adicionar Pendente</button>
+          <button class="fbtn danger" onclick="reqClear()">🗑 Limpar Tudo</button>
+        </div>
+      </div>
+      <div class="tcard">
+        <div class="ttbar">
+          <div class="tt-title">📋 Lista Completa <span class="tt-chip" id="cntGrid">0</span></div>
+          <div class="tt-right">
+            <input type="date" id="g-s" class="fi" onchange="renderGrid()">
+            <span style="font-size:.7rem;color:#9CA3AF">até</span>
+            <input type="date" id="g-e" class="fi" onchange="renderGrid()">
+            <button class="fbtn" onclick="setWeek('g');renderGrid()">Semana</button>
+            <button class="fbtn" onclick="clearDates('g');renderGrid()">Todos</button>
+            <input type="text" id="g-q" class="fi wide" placeholder="🔍 Pesquisar..." oninput="renderGrid()">
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="dt">
+          <thead><tr>
+            <th>ID do Pacote</th><th>Motivo</th><th>Placa</th><th>Motorista</th>
+            <th>Triador</th><th>Desde</th><th>Recebido Em</th>
+            <th class="center">Status</th><th class="right">Ações</th>
+          </tr></thead>
+          <tbody id="gridBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- VIEW: PENDENTES -->
+    <div id="view-pending" style="display:none">
+      <div class="ph">
+        <div class="ph-info"><div class="ph-title">⏳ Pendentes</div><div class="ph-sub">Aguardando retorno do motorista</div></div>
+        <div class="ph-actions">
+          <button class="fbtn prim" onclick="openAddPending()">+ Adicionar</button>
+        </div>
+      </div>
+      <div class="tcard">
+        <div class="ttbar">
+          <div class="tt-title">Pacotes Pendentes <span class="tt-chip" id="cntPend">0</span></div>
+          <div class="tt-right">
+            <input type="text" id="p-q" class="fi wide" placeholder="🔍 Pesquisar..." oninput="renderPending()">
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="dt">
+          <thead><tr>
+            <th>ID do Pacote</th><th>Motivo</th><th>Motorista</th><th>Placa</th>
+            <th>Desde</th><th class="center">Horas em Aberto</th><th class="center">Status</th><th class="right">Ações</th>
+          </tr></thead>
+          <tbody id="pendBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- VIEW: ALERTA -->
+    <div id="view-alert" style="display:none">
+      <div class="ph">
+        <div class="ph-info"><div class="ph-title">🚨 Alerta +24h</div><div class="ph-sub">Ultrapassaram o prazo máximo de entrega</div></div>
+      </div>
+      <div class="alert-banner">⚠️ Esses pacotes estão há mais de 24h sem recebimento. Acione o motorista imediatamente!</div>
+      <div class="tcard">
+        <div style="overflow-x:auto"><table class="dt">
+          <thead><tr>
+            <th>ID do Pacote</th><th>Motivo</th><th>Motorista</th><th>Placa</th>
+            <th>Desde</th><th class="center">Horas em Aberto</th><th class="right">Ações</th>
+          </tr></thead>
+          <tbody id="alertBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- VIEW: RECEBIDOS -->
+    <div id="view-received" style="display:none">
+      <div class="ph">
+        <div class="ph-info"><div class="ph-title">✅ Recebidos</div><div class="ph-sub">Histórico de insucessos concluídos</div></div>
+        <div class="ph-actions">
+          <button class="fbtn" onclick="exportCSV()">⬇️ CSV</button>
+        </div>
+      </div>
+      <div class="tcard">
+        <div class="ttbar">
+          <div class="tt-title">Histórico <span class="tt-chip" id="cntRec">0</span></div>
+          <div class="tt-right">
+            <input type="date" id="r-s" class="fi" onchange="renderReceived()">
+            <span style="font-size:.7rem;color:#9CA3AF">até</span>
+            <input type="date" id="r-e" class="fi" onchange="renderReceived()">
+            <button class="fbtn" onclick="setWeek('r');renderReceived()">Semana</button>
+            <button class="fbtn" onclick="clearDates('r');renderReceived()">Todos</button>
+            <input type="text" id="r-q" class="fi" placeholder="Motorista..." oninput="renderReceived()" style="width:130px">
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="dt">
+          <thead><tr>
+            <th>ID do Pacote</th><th>Comprovante</th><th>Motivo</th><th>Placa</th>
+            <th>Motorista</th><th>Triador</th><th>Desde</th><th>Recebido Em</th>
+          </tr></thead>
+          <tbody id="recBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- VIEW: PACOTE VOANDO -->
+    <div id="view-voando" style="display:none">
+      <div class="ph">
+        <div class="ph-info"><div class="ph-title">✈️ Pacote Voando</div><div class="ph-sub">Pacotes em trânsito — aguardando chegada na base</div></div>
+      </div>
+      <div style="background:#EFF6FF;border:1px solid #93c5fd;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;color:#1d4ed8;font-weight:600;display:flex;align-items:center;gap:8px">
+        ✈️ Esses pacotes estão em trânsito. Aguarde a chegada para realizar o recebimento.
+      </div>
+      <div class="tcard">
+        <div style="overflow-x:auto"><table class="dt">
+          <thead><tr>
+            <th>ID do Pacote</th><th>Motivo</th><th>Motorista</th><th>Placa</th>
+            <th>Registrado Em</th><th class="center">Status</th><th class="right">Ações</th>
+          </tr></thead>
+          <tbody id="voandoBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- VIEW: PACOTE FALTANTE -->
+    <div id="view-faltante" style="display:none">
+      <div class="ph">
+        <div class="ph-info"><div class="ph-title">❓ Pacote Faltante</div><div class="ph-sub">Pacotes não localizados — reportar à supervisão</div></div>
+      </div>
+      <div style="background:#F3F4F6;border:1px solid #9CA3AF;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;color:#374151;font-weight:600;display:flex;align-items:center;gap:8px">
+        ❓ Esses pacotes foram marcados como faltantes. Verifique com o motorista e supervisão.
+      </div>
+      <div class="tcard">
+        <div style="overflow-x:auto"><table class="dt">
+          <thead><tr>
+            <th>ID do Pacote</th><th>Motivo</th><th>Motorista</th><th>Placa</th>
+            <th>Registrado Em</th><th class="center">Status</th><th class="right">Ações</th>
+          </tr></thead>
+          <tbody id="faltanteBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- VIEW: ANALYTICS -->
+    <div id="view-analytics" style="display:none">
+      <div class="ph">
+        <div class="ph-info"><div class="ph-title">📊 Gráficos & Análise</div></div>
+        <div class="ph-actions">
+          <input type="date" id="a-s" class="fi" onchange="renderAnalytics()">
+          <span style="font-size:.7rem;color:#9CA3AF">até</span>
+          <input type="date" id="a-e" class="fi" onchange="renderAnalytics()">
+          <button class="fbtn prim" onclick="setWeek('a');renderAnalytics()">Semana</button>
+          <button class="fbtn" onclick="clearDates('a');renderAnalytics()">Todos</button>
+        </div>
+      </div>
+      <div class="an-kpis">
+        <div class="an-kpi"><div class="an-val" id="an-total">0</div><div class="an-lbl">Total Período</div></div>
+        <div class="an-kpi" style="border-color:#a7f3d0;background:#F0FDF4"><div class="an-val" style="color:#065f46" id="an-rec">0</div><div class="an-lbl">Recebidos</div></div>
+        <div class="an-kpi" style="border-color:#fde68a;background:#FFFBEB"><div class="an-val" style="color:#92400e" id="an-pend">0</div><div class="an-lbl">Pendentes</div></div>
+        <div class="an-kpi" style="border-color:#fca5a5;background:#FEF2F2"><div class="an-val" style="color:#991b1b" id="an-alert">0</div><div class="an-lbl">+24h Alerta</div></div>
+      </div>
+      <div class="an-grid">
+        <div class="ch-card"><div class="ch-title">📈 Volume Diário (Recebidos vs Pendentes)</div><div class="ch-wrap"><canvas id="chDaily"></canvas></div></div>
+        <div class="ch-card"><div class="ch-title">🏷️ Motivos de Retorno</div><div class="ch-wrap"><canvas id="chReasons"></canvas></div></div>
+      </div>
+      <div class="ch-card"><div class="ch-title">🚗 Top Motoristas por Volume</div><div class="ch-wrap" style="height:220px"><canvas id="chDrivers"></canvas></div></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL: Comprovante -->
+<div class="overlay" id="rcModal">
+  <div class="modal" style="max-width:520px" id="rcModalInner">
+    <!-- Área imprimível -->
+    <div id="printArea" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+      <!-- Cabeçalho do comprovante -->
+      <div style="background:#FFE600;border-radius:10px 10px 0 0;padding:14px 18px;display:flex;align-items:center;gap:12px;margin:-22px -22px 16px -22px">
+        <img src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.19.1/mercadolibre/logo__large_plus.png" style="height:26px"
+             onerror="this.style.display='none'">
+        <div>
+          <div style="font-size:0.82rem;font-weight:900;color:#1C1C1E">COMPROVANTE DE RECEBIMENTO</div>
+          <div style="font-size:0.6rem;color:rgba(0,0,0,0.55);font-weight:600">Controle de Insucessos — Última Milha</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:1rem;font-weight:900;color:#1C1C1E;font-family:monospace" id="rc-code"></div>
+          <div style="font-size:0.58rem;color:rgba(0,0,0,0.55)">Código do Comprovante</div>
+        </div>
+      </div>
+
+      <!-- Dados do motorista -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Motorista</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#1C1C1E" id="rc-driver"></div>
+        </div>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Placa do Veículo</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#1C1C1E;font-family:monospace" id="rc-plate"></div>
+        </div>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Triador / Responsável</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#1C1C1E" id="rc-receiver"></div>
+        </div>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Data / Hora do Recebimento</div>
+          <div style="font-size:0.85rem;font-weight:800;color:#065f46" id="rc-time"></div>
+        </div>
+      </div>
+
+      <!-- Lista de pacotes -->
+      <div style="border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;margin-bottom:14px">
+        <div style="background:#FAFAFA;padding:8px 12px;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:0.72rem;font-weight:800;color:#1C1C1E">📦 Pacotes Recebidos</span>
+          <span style="background:#FFE600;border-radius:20px;font-size:0.62rem;font-weight:800;padding:2px 8px" id="rc-cnt">0</span>
+        </div>
+        <div class="pkg-list" id="rc-pkgs" style="max-height:180px;overflow-y:auto;padding:4px 0"></div>
+      </div>
+
+      <!-- Assinatura -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+        <div style="border-top:2px solid #1C1C1E;padding-top:6px;text-align:center">
+          <div style="font-size:0.62rem;color:#6B7280">Assinatura do Motorista</div>
+        </div>
+        <div style="border-top:2px solid #1C1C1E;padding-top:6px;text-align:center">
+          <div style="font-size:0.62rem;color:#6B7280">Assinatura do Triador</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botões (não imprimem) -->
+    <div class="mft" style="margin-top:16px;border-top:1px solid #F0F2F5;padding-top:14px">
+      <button class="fbtn prim" onclick="printComprovante()">🖨️ Imprimir Comprovante</button>
+      <button class="fbtn" onclick="closeModal('rcModal')">✓ Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Senha -->
+<div class="overlay" id="pwdModal">
+  <div class="modal" style="max-width:300px;text-align:center">
+    <div class="mhd" style="justify-content:center">🔐 Ação Restrita</div>
+    <div class="mfield">
+      <input type="password" id="pwdIn" class="pwd-field" placeholder="Senha..." autocomplete="off">
+    </div>
+    <div class="mft" style="justify-content:center">
+      <button class="fbtn prim" onclick="verifyPwd()">Confirmar</button>
+      <button class="fbtn" onclick="closeModal('pwdModal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Duplicata -->
+<div class="overlay" id="dupModal">
+  <div class="modal" style="max-width:340px">
+    <div class="dup-box">
+      <div class="dup-icon">⚠️</div>
+      <div class="dup-title">Pacote já registrado!</div>
+      <div class="dup-msg" id="dupMsg"></div>
+    </div>
+    <label class="dup-check">
+      <input type="checkbox" id="dupChk" style="width:16px;height:16px;accent-color:#f59e0b">
+      <span style="font-size:0.8rem;font-weight:600">Ciente — prosseguir mesmo assim</span>
+    </label>
+    <div class="mft" style="justify-content:center">
+      <button class="fbtn" style="background:#f59e0b;border-color:#d97706;color:#fff;font-weight:800" onclick="confirmDup()">Prosseguir</button>
+      <button class="fbtn" onclick="closeModal('dupModal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Adicionar Pendente -->
+<div class="overlay" id="apModal">
+  <div class="modal" style="max-width:400px">
+    <div class="mhd">➕ Adicionar Pacote Pendente</div>
+    <div class="mfield"><label>ID do Pacote *</label><input id="ap-id" placeholder="Código do pacote"></div>
+    <div class="mfield"><label>Data/Hora Início *</label><input type="datetime-local" id="ap-date"></div>
+    <div class="mfield"><label>Motorista</label><input id="ap-driver" placeholder="Nome do motorista"></div>
+    <div class="mfield"><label>Placa</label><input id="ap-plate" placeholder="ABC1234" style="text-transform:uppercase"></div>
+    <div class="mfield"><label>Motivo</label><select id="ap-reason" style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:8px;padding:8px 11px;font-size:0.85rem;font-family:inherit"></select></div>
+    <div class="mft">
+      <button class="fbtn prim" onclick="saveAddPending()">Adicionar</button>
+      <button class="fbtn" onclick="closeModal('apModal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Config GitHub -->
+<div class="overlay" id="cfgModal">
+  <div class="modal" style="max-width:440px">
+    <div class="mhd">⚙️ Configurar GitHub</div>
+    <div class="warn-box">⚠️ O token fica salvo apenas no seu navegador (localStorage). Use um PAT com escopo <code>repo</code>.</div>
+    <div class="mfield"><label>GitHub Token (PAT)</label><input type="password" id="cfg-token" placeholder="github_pat_..."></div>
+    <div class="mfield"><label>Repositório (usuario/repo)</label><input id="cfg-repo" placeholder="meu-usuario/meu-repositorio"></div>
+    <div class="mfield"><label>Arquivo de dados</label><input id="cfg-file" placeholder="data.json"></div>
+    <div class="mft">
+      <button class="fbtn prim" onclick="saveCfg()">💾 Salvar e Sincronizar</button>
+      <button class="fbtn" onclick="closeModal('cfgModal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Câmera / Scanner -->
+<div class="overlay" id="camModal">
+  <div class="modal" style="max-width:420px;padding:0">
+    <div id="cam-header">
+      <h3>📷 Escanear Código de Barras / QR</h3>
+      <button id="cam-close-btn" onclick="closeCamera()">✕ Fechar</button>
+    </div>
+    <div id="cam-viewport">
+      <div id="html5-qrcode-reader"></div>
+      <div id="cam-overlay">
+        <div class="cam-frame">
+          <div class="cam-corner tl"></div>
+          <div class="cam-corner tr"></div>
+          <div class="cam-corner bl"></div>
+          <div class="cam-corner br"></div>
+          <div class="scan-line"></div>
+          <div id="cam-result-flash"></div>
+        </div>
+      </div>
+    </div>
+    <div id="cam-status">🔍 Aponte a câmera para o código de barras...</div>
+    <div id="cam-footer">
+      <button class="cam-fbtn" onclick="switchCamera()" id="camSwitchBtn">🔄 Trocar Câmera</button>
+      <button class="cam-fbtn primary" onclick="closeCamera()">✓ Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================================================================
+   CONSTANTS
+=================================================================== */
+var REASONS = [
+  "Cliente ausente / Não atende",
+  "Endereço não localizado / Incompleto",
+  "Recusado pelo destinatário",
+  "Estabelecimento fechado",
+  "Tentativa fora do horário comercial",
+  "Problemas operacionais / Avaria",
+  "Endereço de difícil acesso / Área de risco",
+  "Não visitado",
+  "Outros motivos"
+];
+
+/* ===================================================================
+   STATE
+=================================================================== */
+var cfg = {};
+try { cfg = JSON.parse(localStorage.getItem('pkg_gh_cfg') || '{}'); } catch(e) { cfg = {}; }
+
+var pkgs = [];
+try { pkgs = JSON.parse(localStorage.getItem('pkg_data') || '[]'); } catch(e) { pkgs = []; }
+
+var activeView = 'grid';
+var pendingAction = null;
+var pendingDupId = null;
+var pendingDupTag = null;
+
+var chartDaily = null;
+var chartReasons = null;
+var chartDrivers = null;
+
+/* ===================================================================
+   GITHUB API
+=================================================================== */
+function ghHeaders() {
+  return {
+    'Authorization': 'token ' + (cfg.token || ''),
+    'Accept': 'application/vnd.github.v3+json',
+    'Content-Type': 'application/json'
+  };
+}
+
+function ghUrl() {
+  return 'https://api.github.com/repos/' + (cfg.repo || '') + '/contents/' + (cfg.file || 'data.json');
+}
+
+function doSync() {
+  if (!cfg.token || !cfg.repo) {
+    setSyncUI('nocfg');
+    return Promise.resolve();
+  }
+  setSyncUI('spin');
+  return fetch(ghUrl(), { headers: ghHeaders() })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(f) {
+      var decoded = atob(f.content.replace(/\n/g, ''));
+      var data = JSON.parse(decoded);
+      if (Array.isArray(data)) {
+        pkgs = data;
+        localStorage.setItem('pkg_data', JSON.stringify(pkgs));
+      }
+      setSyncUI('ok');
+      refreshAll();
+    })
+    .catch(function(e) {
+      console.warn('Sync error:', e);
+      setSyncUI('err');
+    });
+}
+
+function saveGH() {
+  if (!cfg.token || !cfg.repo) return Promise.resolve();
+  return fetch(ghUrl(), { headers: ghHeaders() })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(f) {
+      var sha = f.sha;
+      var json = JSON.stringify(pkgs, null, 2);
+      var encoded = btoa(unescape(encodeURIComponent(json)));
+      return fetch(ghUrl(), {
+        method: 'PUT',
+        headers: ghHeaders(),
+        body: JSON.stringify({
+          message: 'update ' + new Date().toISOString(),
+          content: encoded,
+          sha: sha
+        })
+      });
+    })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+    });
+}
+
+function persist() {
+  localStorage.setItem('pkg_data', JSON.stringify(pkgs));
+  setSyncUI('spin');
+  saveGH()
+    .then(function() { setSyncUI('ok'); })
+    .catch(function() { setSyncUI('err'); });
+}
+
+function setSyncUI(state) {
+  var dot = document.getElementById('syncDot');
+  var txt = document.getElementById('syncTxt');
+  if (!dot || !txt) return;
+  if (state === 'spin')   { dot.className = 'sync-dot spin'; txt.textContent = 'Sincronizando...'; }
+  if (state === 'ok')     { dot.className = 'sync-dot ok';   txt.textContent = '☁ Sincronizado'; }
+  if (state === 'err')    { dot.className = 'sync-dot err';  txt.textContent = 'Offline (local)'; }
+  if (state === 'nocfg')  { dot.className = 'sync-dot err';  txt.textContent = '⚙ Não configurado'; }
+}
+
+/* ===================================================================
+   INIT
+=================================================================== */
+window.addEventListener('DOMContentLoaded', function() {
+  // Restore field defaults
+  var savedRecv  = localStorage.getItem('pkg_recv') || '';
+  var savedDrv   = localStorage.getItem('pkg_drv')  || '';
+  var savedPlate = localStorage.getItem('pkg_plt')  || '';
+  document.getElementById('defReceiver').value = savedRecv;
+  document.getElementById('defDriver').value   = savedDrv;
+  document.getElementById('defPlate').value    = savedPlate;
+
+  // Populate reason selects
+  var apReason = document.getElementById('ap-reason');
+  REASONS.forEach(function(r) {
+    var opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = r;
+    apReason.appendChild(opt);
+  });
+
+  // Set up scanner Enter key
+  document.getElementById('scanInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); triggerScan(); }
+  });
+  document.getElementById('pwdIn').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { verifyPwd(); }
+  });
+
+  // Set date defaults for each view
+  setWeek('g');
+  setWeek('r');
+  setWeek('a');
+
+  // Initial render
+  refreshAll();
+
+  // Sync with GitHub
+  if (cfg.token && cfg.repo) {
+    doSync();
+  } else {
+    setSyncUI('nocfg');
+  }
+});
+
+/* ===================================================================
+   NAVIGATION
+=================================================================== */
+function nav(view) {
+  var views = ['grid', 'pending', 'alert', 'received', 'voando', 'faltante', 'analytics'];
+  views.forEach(function(v) {
+    var el  = document.getElementById('view-' + v);
+    var btn = document.getElementById('nl-' + v);
+    if (el)  el.style.display = v === view ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', v === view);
+  });
+  activeView = view;
+
+  if (view === 'grid')      renderGrid();
+  if (view === 'pending')   renderPending();
+  if (view === 'alert')     renderAlert();
+  if (view === 'received')  renderReceived();
+  if (view === 'voando')    renderVoando();
+  if (view === 'faltante')  renderFaltante();
+  if (view === 'analytics') { initCharts(); renderAnalytics(); }
+}
+
+/* ===================================================================
+   SCANNER
+=================================================================== */
+function triggerScan() {
+  var raw = document.getElementById('scanInput').value.trim();
+  if (!raw) { showToast('Digite ou bipe o ID do pacote.', 'w'); return; }
+  processScan(raw);
+}
+
+function processScan(raw) {
+  var id = raw.trim();
+  var tag = null;
+
+  // Try to parse JSON (QR code may encode JSON)
+  try {
+    var obj = JSON.parse(raw);
+    if (obj && obj.id) { id = String(obj.id); tag = obj.t || null; }
+  } catch(e) {}
+
+  // Check for duplicates (already received, not just pending)
+  var dup = null;
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === id && pkgs[i].status !== 'Pendente') {
+      dup = pkgs[i];
+      break;
+    }
+  }
+
+  if (dup) {
+    pendingDupId = id;
+    pendingDupTag = tag;
+    document.getElementById('dupMsg').textContent = 'O pacote "' + id + '" já foi registrado como "' + dup.status + '".';
+    document.getElementById('dupChk').checked = false;
+    openModal('dupModal');
+    return;
+  }
+
+  execScan(id, tag);
+}
+
+function confirmDup() {
+  if (!document.getElementById('dupChk').checked) {
+    showToast('Marque a confirmação para prosseguir.', 'w');
+    return;
+  }
+  closeModal('dupModal');
+  if (pendingDupId) {
+    execScan(pendingDupId, pendingDupTag);
+    pendingDupId = null;
+    pendingDupTag = null;
+  }
+}
+
+function execScan(id, tag) {
+  var recv  = document.getElementById('defReceiver').value.trim() || '—';
+  var drv   = document.getElementById('defDriver').value.trim()   || '—';
+  var plate = document.getElementById('defPlate').value.trim().toUpperCase() || '—';
+
+  localStorage.setItem('pkg_recv', recv);
+  localStorage.setItem('pkg_drv',  drv);
+  localStorage.setItem('pkg_plt',  plate);
+
+  var now = fmtNow();
+
+  // Find existing pending (to preserve pendingDate and reason)
+  var existing = null;
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === id) { existing = pkgs[i]; break; }
+  }
+
+  // Generate or reuse receipt code
+  var code = genCode();
+
+  var newPkg = {
+    id:          String(id),
+    status:      tag === 'lm' ? 'Recebido (LM)' : 'Recebido',
+    reason:      existing ? existing.reason : REASONS[0],
+    plate:       plate,
+    driver:      drv,
+    receiver:    recv,
+    pendingDate: existing ? existing.pendingDate : now,
+    receivedAt:  now,
+    receiptCode: code,
+    specialTag:  tag || '',
+    ts:          new Date().toISOString()
+  };
+
+  // Replace existing or prepend
+  var idx = -1;
+  for (var j = 0; j < pkgs.length; j++) {
+    if (String(pkgs[j].id) === id) { idx = j; break; }
+  }
+  if (idx !== -1) {
+    pkgs[idx] = newPkg;
+  } else {
+    pkgs.unshift(newPkg);
+  }
+
+  persist();
+  refreshAll();
+
+  // Feedback
+  var fb = document.getElementById('scanFb');
+  if (fb) { fb.textContent = '✅ ' + id + ' — ' + now; }
+  document.getElementById('scanInput').value = '';
+  document.getElementById('scanInput').focus();
+  setTimeout(function() {
+    var fb2 = document.getElementById('scanFb');
+    if (fb2) fb2.textContent = '';
+  }, 4000);
+
+  showToast('📦 ' + id + ' recebido! Comprovante gerado.', 's');
+
+  // Auto-abrir comprovante após bipagem
+  var scanId = id;
+  setTimeout(function() { openReceipt(scanId); }, 350);
+}
+
+/* ===================================================================
+   REFRESH ALL
+=================================================================== */
+function refreshAll() {
+  var total = pkgs.length;
+  var rec = 0, pend = 0, alert24 = 0, voando = 0, faltante = 0;
+  for (var i = 0; i < pkgs.length; i++) {
+    var st = pkgs[i].status;
+    if (st === 'Pendente') {
+      pend++;
+      if (hoursOpen(pkgs[i].pendingDate) > 24) alert24++;
+    } else if (st === 'Pacote Voando') {
+      voando++;
+    } else if (st === 'Pacote Faltante') {
+      faltante++;
+    } else {
+      rec++;
+    }
+  }
+
+  setText('kTotal',   total);
+  setText('kRec',     rec);
+  setText('kPend',    pend);
+  setText('kAlert',   alert24);
+  setText('kVoando',  voando);
+  setText('kFaltante',faltante);
+
+  var closed = rec; // only received counts as resolved
+  var pct = total > 0 ? Math.round((closed / total) * 100) : 0;
+  setText('progPct', pct + '%');
+  setText('progRec',  rec + ' recebidos');
+  setText('progPend', (pend + voando + faltante) + ' em aberto');
+  var fill = document.getElementById('progFill');
+  if (fill) fill.style.width = pct + '%';
+
+  setBadge('nb-pend',    pend,    pend > 0);
+  setBadge('nb-alert',   alert24, alert24 > 0);
+  setBadge('nb-rec',     rec,     rec > 0);
+  setBadge('nb-voando',  voando,  voando > 0);
+  setBadge('nb-faltante',faltante,faltante > 0);
+
+  // Re-render active view
+  if (activeView === 'grid')      renderGrid();
+  if (activeView === 'pending')   renderPending();
+  if (activeView === 'alert')     renderAlert();
+  if (activeView === 'received')  renderReceived();
+  if (activeView === 'voando')    renderVoando();
+  if (activeView === 'faltante')  renderFaltante();
+  if (activeView === 'analytics') renderAnalytics();
+}
+
+/* ===================================================================
+   RENDER: GRID (Todos)
+=================================================================== */
+function renderGrid() {
+  var q  = (document.getElementById('g-q') ? document.getElementById('g-q').value : '').toLowerCase().trim();
+  var sD = getDateInput('g-s', true);
+  var eD = getDateInput('g-e', false);
+
+  var list = pkgs.filter(function(p) {
+    var dt = p.status !== 'Pendente' ? p.receivedAt : p.pendingDate;
+    if (!inRange(dt, sD, eD)) return false;
+    if (q) {
+      var match = String(p.id).toLowerCase().indexOf(q) >= 0 ||
+                  (p.driver || '').toLowerCase().indexOf(q) >= 0 ||
+                  (p.plate  || '').toLowerCase().indexOf(q) >= 0;
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  setText('cntGrid', list.length);
+  buildTable('gridBody', list, 'grid');
+}
+
+/* ===================================================================
+   RENDER: PENDING
+=================================================================== */
+function renderPending() {
+  var q = (document.getElementById('p-q') ? document.getElementById('p-q').value : '').toLowerCase().trim();
+  var list = pkgs.filter(function(p) {
+    if (p.status !== 'Pendente') return false;
+    if (q) {
+      return String(p.id).toLowerCase().indexOf(q) >= 0 ||
+             (p.driver || '').toLowerCase().indexOf(q) >= 0;
+    }
+    return true;
+  });
+  setText('cntPend', list.length);
+  buildTable('pendBody', list, 'pending');
+}
+
+/* ===================================================================
+   RENDER: VOANDO
+=================================================================== */
+function renderVoando() {
+  var list = pkgs.filter(function(p) { return p.status === 'Pacote Voando'; });
+  buildTable('voandoBody', list, 'special');
+}
+
+/* ===================================================================
+   RENDER: FALTANTE
+=================================================================== */
+function renderFaltante() {
+  var list = pkgs.filter(function(p) { return p.status === 'Pacote Faltante'; });
+  buildTable('faltanteBody', list, 'special');
+}
+
+/* ===================================================================
+   RENDER: ALERT
+=================================================================== */
+function renderAlert() {
+  var list = pkgs.filter(function(p) {
+    return p.status === 'Pendente' && hoursOpen(p.pendingDate) > 24;
+  });
+  buildTable('alertBody', list, 'alert');
+}
+
+/* ===================================================================
+   RENDER: RECEIVED
+=================================================================== */
+function renderReceived() {
+  var q  = (document.getElementById('r-q') ? document.getElementById('r-q').value : '').toLowerCase().trim();
+  var sD = getDateInput('r-s', true);
+  var eD = getDateInput('r-e', false);
+
+  var list = pkgs.filter(function(p) {
+    if (p.status === 'Pendente') return false;
+    if (!inRange(p.receivedAt, sD, eD)) return false;
+    if (q && (p.driver || '').toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+
+  setText('cntRec', list.length);
+  buildTable('recBody', list, 'received');
+}
+
+/* ===================================================================
+   BUILD TABLE (pure DOM, no template literals)
+=================================================================== */
+function buildTable(tbodyId, list, mode) {
+  var tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+
+  // Clear
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+  if (list.length === 0) {
+    var tr = document.createElement('tr');
+    tr.className = 'empty-row';
+    var colspan = mode === 'received' ? 8 : mode === 'alert' ? 6 : 8;
+    var td = document.createElement('td');
+    td.colSpan = colspan;
+    td.innerHTML = '<span class="empty-ico">📦</span><strong>Nenhum registro</strong><br><small>Bipe um pacote ou ajuste os filtros</small>';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  list.forEach(function(p) {
+    var tr = buildRow(p, mode);
+    tbody.appendChild(tr);
+  });
+}
+
+function buildRow(p, mode) {
+  var tr = document.createElement('tr');
+  var isPend   = p.status === 'Pendente';
+  var isVoando = p.status === 'Pacote Voando';
+  var isFaltante = p.status === 'Pacote Faltante';
+  var isRec    = !isPend && !isVoando && !isFaltante;
+  var hrs      = isPend ? hoursOpen(p.pendingDate) : 0;
+  var isAlert  = isPend && hrs > 24;
+
+  if (isAlert)    tr.className = 'row-alert';
+  else if (isVoando)   tr.className = 'row-voando';
+  else if (isFaltante) tr.className = 'row-faltante';
+  else if (isRec)      tr.className = 'row-rec';
+
+  // Special view (voando/faltante)
+  if (mode === 'special') {
+    tr.appendChild(tdId(p));
+    tr.appendChild(tdReason(p));
+    tr.appendChild(td(p.driver || '—', ''));
+    tr.appendChild(td(p.plate  || '—', 'mono'));
+    tr.appendChild(td(p.pendingDate || '—', 'small'));
+    tr.appendChild(tdStatus(p, isPend, hrs, isAlert));
+    tr.appendChild(tdActions(p, isPend));
+    return tr;
+  }
+
+  if (mode === 'grid') {
+    tr.appendChild(tdId(p));
+    tr.appendChild(tdReason(p));
+    tr.appendChild(td(p.plate || '—', 'mono'));
+    tr.appendChild(td(p.driver   || '—', ''));
+    tr.appendChild(td(p.receiver || '—', ''));
+    tr.appendChild(td(p.pendingDate || '—', 'small'));
+    tr.appendChild(td(isPend ? '—' : (p.receivedAt || '—'), 'small'));
+    tr.appendChild(tdStatus(p, isPend, hrs, isAlert));
+    tr.appendChild(tdActions(p, isPend));
+    return tr;
+  }
+
+  if (mode === 'pending') {
+    tr.appendChild(tdId(p));
+    tr.appendChild(tdReason(p));
+    tr.appendChild(td(p.driver || '—', ''));
+    tr.appendChild(td(p.plate  || '—', 'mono'));
+    tr.appendChild(td(p.pendingDate || '—', 'small'));
+    tr.appendChild(tdHours(hrs, isAlert));
+    tr.appendChild(tdStatus(p, isPend, hrs, isAlert));
+    tr.appendChild(tdActions(p, isPend));
+    return tr;
+  }
+
+  if (mode === 'alert') {
+    tr.appendChild(tdId(p));
+    tr.appendChild(tdReason(p));
+    tr.appendChild(td(p.driver || '—', ''));
+    tr.appendChild(td(p.plate  || '—', 'mono'));
+    tr.appendChild(td(p.pendingDate || '—', 'small'));
+    tr.appendChild(tdHours(hrs, isAlert));
+    tr.appendChild(tdActions(p, isPend));
+    return tr;
+  }
+
+  // received
+  var tdC = document.createElement('td');
+  if (p.receiptCode) {
+    var span = document.createElement('span');
+    span.className = 'rtag';
+    span.textContent = '🎫 ' + p.receiptCode;
+    tdC.appendChild(span);
+  }
+  tr.appendChild(tdId(p));
+  tr.appendChild(tdC);
+  tr.appendChild(td(p.reason || '—', 'small'));
+  tr.appendChild(td(p.plate  || '—', 'mono'));
+  tr.appendChild(td(p.driver    || '—', ''));
+  tr.appendChild(td(p.receiver  || '—', ''));
+  tr.appendChild(td(p.pendingDate || '—', 'small'));
+  var tdR = document.createElement('td');
+  tdR.textContent = p.receivedAt || '—';
+  tdR.style.fontSize = '0.72rem';
+  tdR.style.color = '#065f46';
+  tdR.style.fontWeight = '600';
+  tr.appendChild(tdR);
+  return tr;
+}
+
+/* -- TD builders -- */
+function td(text, cls) {
+  var el = document.createElement('td');
+  el.textContent = text;
+  if (cls === 'mono') el.className = 'mono';
+  if (cls === 'small') { el.style.fontSize = '0.72rem'; el.style.color = '#9CA3AF'; }
+  return el;
+}
+
+function tdId(p) {
+  var el = document.createElement('td');
+  el.className = 'mono';
+  el.textContent = p.id;
+  if (p.specialTag === 'lm') {
+    var tag = document.createElement('span');
+    tag.className = 'badge lm';
+    tag.style.marginLeft = '5px';
+    tag.textContent = 'LM';
+    el.appendChild(tag);
+  }
+  if (p.receiptCode) {
+    var rtag = document.createElement('span');
+    rtag.className = 'rtag';
+    rtag.textContent = '🎫 ' + p.receiptCode;
+    el.appendChild(rtag);
+  }
+  return el;
+}
+
+function tdReason(p) {
+  var el = document.createElement('td');
+  var sel = document.createElement('select');
+  sel.className = 'rsel';
+  REASONS.forEach(function(r) {
+    var opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = r;
+    if (r === p.reason) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', function() { updateReason(p.id, this.value); });
+  el.appendChild(sel);
+  return el;
+}
+
+function tdStatus(p, isPend, hrs, isAlert) {
+  var el = document.createElement('td');
+  el.className = 'center';
+  var span = document.createElement('span');
+  if (isAlert) {
+    span.className = 'badge alert';
+    span.textContent = '🚨 +' + Math.floor(hrs) + 'h';
+  } else if (p.status === 'Pacote Voando') {
+    span.className = 'badge voando';
+    span.textContent = '✈️ Voando';
+  } else if (p.status === 'Pacote Faltante') {
+    span.className = 'badge faltante';
+    span.textContent = '❓ Faltante';
+  } else if (isPend) {
+    span.className = 'badge pend';
+    span.textContent = '⏳ Pendente';
+  } else {
+    span.className = 'badge recv';
+    span.textContent = '✅ ' + (p.status || 'Recebido');
+  }
+  el.appendChild(span);
+  return el;
+}
+
+function tdHours(hrs, isAlert) {
+  var el = document.createElement('td');
+  el.className = 'center';
+  var span = document.createElement('span');
+  span.className = 'hrs-badge ' + (isAlert ? 'danger' : 'ok');
+  span.textContent = Math.floor(hrs) + 'h';
+  el.appendChild(span);
+  return el;
+}
+
+function tdActions(p, isPend) {
+  var el = document.createElement('td');
+  el.className = 'right';
+  var wrap = document.createElement('div');
+  wrap.className = 'abtn-wrap';
+
+  // Comprovante
+  var btnRc = document.createElement('button');
+  btnRc.className = 'abtn';
+  btnRc.textContent = '🧾';
+  btnRc.title = 'Ver Comprovante';
+  btnRc.addEventListener('click', function() { openReceipt(p.id); });
+  wrap.appendChild(btnRc);
+
+  var st = p.status;
+
+  // Receber (se pendente, voando ou faltante)
+  if (st === 'Pendente' || st === 'Pacote Voando' || st === 'Pacote Faltante') {
+    var btnOk = document.createElement('button');
+    btnOk.className = 'abtn g';
+    btnOk.textContent = '✅';
+    btnOk.title = 'Marcar como Recebido';
+    btnOk.addEventListener('click', function() { confirmReceive(p.id); });
+    wrap.appendChild(btnOk);
+  }
+
+  // Marcar Voando (se pendente ou faltante)
+  if (st === 'Pendente' || st === 'Pacote Faltante') {
+    var btnV = document.createElement('button');
+    btnV.className = 'abtn';
+    btnV.style.color = '#1d4ed8';
+    btnV.style.borderColor = '#93c5fd';
+    btnV.textContent = '✈️';
+    btnV.title = 'Marcar: Pacote Voando';
+    btnV.addEventListener('click', function() { setStatus(p.id, 'Pacote Voando'); });
+    wrap.appendChild(btnV);
+  }
+
+  // Marcar Faltante (se pendente ou voando)
+  if (st === 'Pendente' || st === 'Pacote Voando') {
+    var btnF = document.createElement('button');
+    btnF.className = 'abtn';
+    btnF.style.color = '#374151';
+    btnF.style.borderColor = '#9CA3AF';
+    btnF.textContent = '❓';
+    btnF.title = 'Marcar: Pacote Faltante';
+    btnF.addEventListener('click', function() { setStatus(p.id, 'Pacote Faltante'); });
+    wrap.appendChild(btnF);
+  }
+
+  // Reverter (se recebido/voando/faltante)
+  if (st !== 'Pendente') {
+    var btnUndo = document.createElement('button');
+    btnUndo.className = 'abtn';
+    btnUndo.textContent = '↩️';
+    btnUndo.title = 'Reverter para Pendente';
+    btnUndo.addEventListener('click', function() { resetReceive(p.id); });
+    wrap.appendChild(btnUndo);
+  }
+
+  // Excluir
+  var btnDel = document.createElement('button');
+  btnDel.className = 'abtn r';
+  btnDel.textContent = '🗑';
+  btnDel.title = 'Excluir';
+  btnDel.addEventListener('click', function() { reqDelete(p.id); });
+  wrap.appendChild(btnDel);
+
+  el.appendChild(wrap);
+  return el;
+}
+
+/* ===================================================================
+   ACTIONS
+=================================================================== */
+function updateReason(id, reason) {
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === String(id)) { pkgs[i].reason = reason; break; }
+  }
+  persist();
+}
+
+function confirmReceive(id) {
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === String(id)) {
+      pkgs[i].status     = 'Recebido';
+      pkgs[i].receivedAt = fmtNow();
+      if (!pkgs[i].receiptCode) pkgs[i].receiptCode = genCode();
+      break;
+    }
+  }
+  persist();
+  refreshAll();
+  showToast('✅ Pacote recebido! Comprovante gerado.', 's');
+  // Auto-open comprovante
+  setTimeout(function() { openReceipt(id); }, 300);
+}
+
+function setStatus(id, newStatus) {
+  var labels = { 'Pacote Voando': '✈️ Voando', 'Pacote Faltante': '❓ Faltante' };
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === String(id)) {
+      pkgs[i].status = newStatus;
+      if (!pkgs[i].pendingDate || pkgs[i].pendingDate === '—') {
+        pkgs[i].pendingDate = fmtNow();
+      }
+      break;
+    }
+  }
+  persist();
+  refreshAll();
+  showToast((labels[newStatus] || newStatus) + ' registrado!', 'i');
+}
+
+function resetReceive(id) {
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === String(id)) {
+      pkgs[i].status      = 'Pendente';
+      pkgs[i].receivedAt  = '—';
+      pkgs[i].receiptCode = '';
+      break;
+    }
+  }
+  persist();
+  refreshAll();
+  showToast('↩️ Revertido para Pendente.', 'i');
+}
+
+function reqDelete(id) {
+  pendingAction = { type: 'delete', id: id };
+  document.getElementById('pwdIn').value = '';
+  openModal('pwdModal');
+  setTimeout(function() { document.getElementById('pwdIn').focus(); }, 80);
+}
+
+function reqClear() {
+  pendingAction = { type: 'clear' };
+  document.getElementById('pwdIn').value = '';
+  openModal('pwdModal');
+  setTimeout(function() { document.getElementById('pwdIn').focus(); }, 80);
+}
+
+function verifyPwd() {
+  if (document.getElementById('pwdIn').value !== 'L@g') {
+    showToast('❌ Senha incorreta!', 'd');
+    document.getElementById('pwdIn').value = '';
+    return;
+  }
+  closeModal('pwdModal');
+  if (!pendingAction) return;
+
+  if (pendingAction.type === 'delete') {
+    var id = pendingAction.id;
+    pkgs = pkgs.filter(function(p) { return String(p.id) !== String(id); });
+    showToast('🗑 Pacote excluído.', 'i');
+  }
+  if (pendingAction.type === 'clear') {
+    pkgs = [];
+    showToast('🗑 Lista limpa.', 'i');
+  }
+  pendingAction = null;
+  persist();
+  refreshAll();
+}
+
+/* ===================================================================
+   RECEIPT / COMPROVANTE
+=================================================================== */
+function openReceipt(id) {
+  var p = null;
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === String(id)) { p = pkgs[i]; break; }
+  }
+  if (!p) return;
+
+  // Ensure receipt code exists
+  if (!p.receiptCode) {
+    p.receiptCode = genCode();
+    persist();
+  }
+
+  // Find all packages from same driver with same receipt code
+  var linked = pkgs.filter(function(q) {
+    if (!q.receiptCode || q.receiptCode !== p.receiptCode) return false;
+    return true;
+  });
+  // Fallback: show just this package
+  if (linked.length === 0) linked = [p];
+
+  setText('rc-code',     p.receiptCode);
+  setText('rc-driver',   p.driver   || '—');
+  setText('rc-receiver', p.receiver || '—');
+  setText('rc-plate',    p.plate    || '—');
+  setText('rc-time',     p.receivedAt && p.receivedAt !== '—' ? p.receivedAt : fmtNow());
+  setText('rc-cnt',      linked.length);
+
+  var pkgList = document.getElementById('rc-pkgs');
+  pkgList.innerHTML = '';
+  linked.forEach(function(q, idx) {
+    var li = document.createElement('div');
+    li.className = 'pkg-li';
+    li.style.padding = '6px 12px';
+    li.style.background = idx % 2 === 0 ? '#FAFAFA' : '#fff';
+    var pid = document.createElement('span');
+    pid.className = 'pid';
+    pid.textContent = (idx + 1) + '. ' + q.id;
+    var pr = document.createElement('span');
+    pr.className = 'preason';
+    pr.textContent = q.reason || '';
+    li.appendChild(pid);
+    li.appendChild(pr);
+    pkgList.appendChild(li);
+  });
+
+  openModal('rcModal');
+}
+
+function printComprovante() {
+  var printArea = document.getElementById('printArea');
+  if (!printArea) { window.print(); return; }
+
+  var w = window.open('', '_blank', 'width=600,height=700');
+  var content = printArea.innerHTML;
+  w.document.write('<html><head><title>Comprovante</title>');
+  w.document.write('<style>');
+  w.document.write('body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:20px;color:#1C1C1E}');
+  w.document.write('.pkg-li{display:flex;justify-content:space-between;padding:5px 12px;border-bottom:1px solid #E5E7EB;font-size:0.8rem}');
+  w.document.write('.pkg-li:last-child{border:none}');
+  w.document.write('.pid{font-family:monospace;font-weight:700}');
+  w.document.write('.preason{color:#9CA3AF;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.72rem}');
+  w.document.write('@media print{body{margin:0}}');
+  w.document.write('</style></head><body>');
+  w.document.write(content);
+  w.document.write('</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(function() { w.print(); }, 400);
+}
+
+/* ===================================================================
+   ADD PENDING
+=================================================================== */
+function openAddPending() {
+  document.getElementById('ap-id').value     = '';
+  document.getElementById('ap-driver').value = document.getElementById('defDriver').value || '';
+  document.getElementById('ap-plate').value  = document.getElementById('defPlate').value  || '';
+
+  var now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('ap-date').value = now.toISOString().slice(0, 16);
+
+  openModal('apModal');
+  setTimeout(function() { document.getElementById('ap-id').focus(); }, 80);
+}
+
+function saveAddPending() {
+  var id    = document.getElementById('ap-id').value.trim();
+  var dt    = document.getElementById('ap-date').value;
+  var drv   = document.getElementById('ap-driver').value.trim() || '—';
+  var plate = document.getElementById('ap-plate').value.trim().toUpperCase() || '—';
+  var rsn   = document.getElementById('ap-reason').value;
+
+  if (!id || !dt) { showToast('Preencha ID e Data/Hora.', 'w'); return; }
+
+  var parts = dt.split('T');
+  var d = parts[0].split('-');
+  var t = parts[1] || '00:00';
+  var fmtDate = d[2] + '/' + d[1] + '/' + d[0] + ' ' + t;
+
+  // Check if already exists
+  var idx = -1;
+  for (var i = 0; i < pkgs.length; i++) {
+    if (String(pkgs[i].id) === String(id)) { idx = i; break; }
+  }
+
+  var newPkg = {
+    id:          String(id),
+    status:      'Pendente',
+    reason:      rsn,
+    plate:       plate,
+    driver:      drv,
+    receiver:    '—',
+    pendingDate: fmtDate,
+    receivedAt:  '—',
+    receiptCode: '',
+    specialTag:  '',
+    ts:          new Date().toISOString()
+  };
+
+  if (idx !== -1) {
+    pkgs[idx] = newPkg;
+  } else {
+    pkgs.unshift(newPkg);
+  }
+
+  persist();
+  refreshAll();
+  closeModal('apModal');
+  showToast('✅ Pacote pendente adicionado!', 's');
+}
+
+/* ===================================================================
+   CONFIG
+=================================================================== */
+function saveCfg() {
+  cfg.token = document.getElementById('cfg-token').value.trim();
+  cfg.repo  = document.getElementById('cfg-repo').value.trim();
+  cfg.file  = document.getElementById('cfg-file').value.trim() || 'data.json';
+  localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
+  closeModal('cfgModal');
+  doSync();
+  showToast('⚙️ Configuração salva!', 'i');
+}
+
+/* ===================================================================
+   ANALYTICS
+=================================================================== */
+function initCharts() {
+  if (chartDaily && chartReasons && chartDrivers) return; // already initialized
+
+  var gridColor = '#F0F2F5';
+  Chart.defaults.color = '#9CA3AF';
+  Chart.defaults.font.size = 11;
+
+  var ctxD = document.getElementById('chDaily');
+  var ctxR = document.getElementById('chReasons');
+  var ctxDr = document.getElementById('chDrivers');
+  if (!ctxD || !ctxR || !ctxDr) return;
+
+  chartDaily = new Chart(ctxD.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'],
+      datasets: [
+        { label: 'Recebidos', data: [0,0,0,0,0,0,0], backgroundColor: '#00a650', borderRadius: 4 },
+        { label: 'Pendentes', data: [0,0,0,0,0,0,0], backgroundColor: '#FFE600', borderRadius: 4, borderColor: '#d4bf00', borderWidth: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { boxWidth: 10 } } },
+      scales: {
+        x: { grid: { color: gridColor } },
+        y: { grid: { color: gridColor }, beginAtZero: true }
+      }
+    }
+  });
+
+  chartReasons = new Chart(ctxR.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: [],
+      datasets: [{ data: [], backgroundColor: ['#3483FA','#00a650','#FFE600','#e53935','#9333ea','#ec4899','#14b8a6','#f97316','#64748b'] }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { boxWidth: 9, font: { size: 9 } } } }
+    }
+  });
+
+  chartDrivers = new Chart(ctxDr.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{ label: 'Insucessos', data: [], backgroundColor: '#3483FA', borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: gridColor }, beginAtZero: true },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderAnalytics() {
+  var sD = getDateInput('a-s', true);
+  var eD = getDateInput('a-e', false);
+
+  var filtered = pkgs.filter(function(p) {
+    var dt = p.status !== 'Pendente' ? p.receivedAt : p.pendingDate;
+    return inRange(dt, sD, eD);
+  });
+
+  var rec = 0, pend = 0, alert24 = 0;
+  var dayRec   = [0,0,0,0,0,0,0];
+  var dayPend  = [0,0,0,0,0,0,0];
+  var reasons  = {};
+  var drivers  = {};
+
+  filtered.forEach(function(p) {
+    var isPend = p.status === 'Pendente';
+    if (isPend) {
+      pend++;
+      if (hoursOpen(p.pendingDate) > 24) alert24++;
+    } else {
+      rec++;
+    }
+
+    var dt = isPend ? p.pendingDate : p.receivedAt;
+    var parts = (dt || '').split(' ')[0].split('/');
+    if (parts.length === 3) {
+      try {
+        var d = new Date(parts[2] + '-' + parts[1] + '-' + parts[0] + 'T00:00:00');
+        var dayIdx = (d.getDay() + 6) % 7; // Mon=0 ... Sun=6
+        if (isPend) dayPend[dayIdx]++;
+        else        dayRec[dayIdx]++;
+      } catch(e) {}
+    }
+
+    if (!isPend) {
+      var r = p.reason || 'Outros';
+      reasons[r] = (reasons[r] || 0) + 1;
+      var drv = p.driver || 'Não informado';
+      if (drv === '—') drv = 'Não informado';
+      drivers[drv] = (drivers[drv] || 0) + 1;
+    }
+  });
+
+  setText('an-total', filtered.length);
+  setText('an-rec',   rec);
+  setText('an-pend',  pend);
+  setText('an-alert', alert24);
+
+  if (chartDaily) {
+    chartDaily.data.datasets[0].data = dayRec;
+    chartDaily.data.datasets[1].data = dayPend;
+    chartDaily.update();
+  }
+
+  if (chartReasons) {
+    var rKeys = Object.keys(reasons);
+    var rVals = rKeys.map(function(k) { return reasons[k]; });
+    chartReasons.data.labels = rKeys;
+    chartReasons.data.datasets[0].data = rVals;
+    chartReasons.update();
+  }
+
+  if (chartDrivers) {
+    var sorted = Object.entries(drivers).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 10);
+    chartDrivers.data.labels = sorted.map(function(e) { return e[0]; });
+    chartDrivers.data.datasets[0].data = sorted.map(function(e) { return e[1]; });
+    chartDrivers.update();
+  }
+}
+
+/* ===================================================================
+   EXPORT CSV
+=================================================================== */
+function exportCSV() {
+  var sD = getDateInput('r-s', true);
+  var eD = getDateInput('r-e', false);
+  var q  = (document.getElementById('r-q') ? document.getElementById('r-q').value : '').toLowerCase().trim();
+
+  var list = pkgs.filter(function(p) {
+    if (p.status === 'Pendente') return false;
+    if (!inRange(p.receivedAt, sD, eD)) return false;
+    if (q && (p.driver || '').toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+
+  var rows = [['ID','Status','Motivo','Placa','Motorista','Triador','Desde','Recebido Em','Comprovante']];
+  list.forEach(function(p) {
+    rows.push([p.id, p.status, p.reason, p.plate, p.driver, p.receiver, p.pendingDate, p.receivedAt, p.receiptCode]);
+  });
+
+  var csv = rows.map(function(row) {
+    return row.map(function(cell) {
+      var s = String(cell || '');
+      if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(',');
+  }).join('\r\n');
+
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'recebimentos_' + fmtDate(new Date()).replace(/\//g, '-') + '.csv';
+  a.click();
+  showToast('⬇️ CSV exportado!', 's');
+}
+
+/* ===================================================================
+   MODAL HELPERS
+=================================================================== */
+function openModal(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+function closeModal(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+  pendingDupId  = null;
+  pendingDupTag = null;
+}
+
+// Close overlay on backdrop click
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('overlay')) {
+    // Se for o modal de câmera, usa closeCamera para parar o stream
+    if (e.target.id === 'camModal') {
+      closeCamera();
+    } else {
+      e.target.classList.remove('open');
+    }
+  }
+});
+
+/* ===================================================================
+   TOAST
+=================================================================== */
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'toast ' + (type || 's');
+  t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(function() { t.classList.remove('show'); }, 2800);
+}
+
+/* ===================================================================
+   DATE / FILTER UTILS
+=================================================================== */
+function setWeek(prefix) {
+  var now  = new Date();
+  var day  = now.getDay(); // 0=Sun
+  var diff = day === 0 ? -6 : 1 - day;
+  var mon  = new Date(now); mon.setDate(now.getDate() + diff);
+  var sun  = new Date(mon); sun.setDate(mon.getDate() + 6);
+  var fmt  = function(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  setVal(prefix + '-s', fmt(mon));
+  setVal(prefix + '-e', fmt(sun));
+}
+
+function clearDates(prefix) {
+  setVal(prefix + '-s', '');
+  setVal(prefix + '-e', '');
+}
+
+function getDateInput(id, isStart) {
+  var el = document.getElementById(id);
+  if (!el || !el.value) return isStart ? new Date('2000-01-01') : new Date('2100-01-01');
+  return isStart ? new Date(el.value + 'T00:00:00') : new Date(el.value + 'T23:59:59');
+}
+
+function inRange(ds, sD, eD) {
+  if (!ds || ds === '—') return true; // no date = always include
+  try {
+    var pts = ds.split(' ')[0].split('/');
+    if (pts.length !== 3) return true;
+    var d = new Date(pts[2] + '-' + pts[1] + '-' + pts[0] + 'T00:00:00');
+    return d >= sD && d <= eD;
+  } catch(e) { return true; }
+}
+
+function hoursOpen(ds) {
+  if (!ds || ds === '—') return 0;
+  try {
+    var parts = ds.split(' ');
+    var dp = parts[0].split('/');
+    var tp = (parts[1] || '00:00').split(':');
+    var d = new Date(dp[2], dp[1] - 1, dp[0], tp[0], tp[1]);
+    return (Date.now() - d.getTime()) / 3600000;
+  } catch(e) { return 0; }
+}
+
+function fmtNow() {
+  var n = new Date();
+  return pad(n.getDate()) + '/' + pad(n.getMonth() + 1) + '/' + n.getFullYear() + ' ' + pad(n.getHours()) + ':' + pad(n.getMinutes());
+}
+
+function fmtDate(d) {
+  return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function genCode() {
+  return 'COMP-' + Math.floor(100000 + Math.random() * 900000);
+}
+
+function setText(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = String(val);
+}
+
+function setVal(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
+function setBadge(id, n, show) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = n;
+  if (show) el.classList.remove('hide');
+  else      el.classList.add('hide');
+}
+
+/* ===================================================================
+   CÂMERA / BARCODE SCANNER
+=================================================================== */
+var html5QrCode = null;
+var camRunning  = false;
+var camFacingMode = 'environment'; // traseira por padrão (celular)
+var lastScanned = '';
+var lastScannedTime = 0;
+
+function openCamera() {
+  // Verifica se a biblioteca está carregada
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('⚠️ Biblioteca de câmera não carregou. Verifique a conexão.', 'w');
+    return;
+  }
+
+  openModal('camModal');
+  camStatus('🔍 Iniciando câmera...', '');
+
+  // Limpa instância anterior
+  if (html5QrCode) {
+    try { html5QrCode.clear(); } catch(e) {}
+    html5QrCode = null;
+  }
+
+  // Garante que o elemento existe e está limpo
+  var readerEl = document.getElementById('html5-qrcode-reader');
+  if (readerEl) readerEl.innerHTML = '';
+
+  html5QrCode = new Html5Qrcode('html5-qrcode-reader');
+
+  var config = {
+    fps: 15,
+    qrbox: { width: 260, height: 140 },
+    aspectRatio: 1.4,
+    disableFlip: false,
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.DATA_MATRIX,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E
+    ]
+  };
+
+  html5QrCode.start(
+    { facingMode: camFacingMode },
+    config,
+    onScanSuccess,
+    onScanError
+  ).then(function() {
+    camRunning = true;
+    camStatus('📷 Câmera ativa — aponte para o código', '');
+    var btn = document.getElementById('camBtn');
+    if (btn) { btn.textContent = '⏹ Parar'; btn.classList.add('active'); }
+  }).catch(function(err) {
+    console.warn('Camera error:', err);
+    if (String(err).indexOf('Permission') >= 0 || String(err).indexOf('ermiss') >= 0) {
+      camStatus('❌ Permissão de câmera negada. Autorize nas configurações do navegador.', 'err');
+    } else if (String(err).indexOf('NotFound') >= 0 || String(err).indexOf('Devices') >= 0) {
+      camStatus('❌ Nenhuma câmera encontrada neste dispositivo.', 'err');
+    } else {
+      camStatus('❌ Erro ao iniciar câmera: ' + String(err).substring(0, 60), 'err');
+    }
+  });
+}
+
+function onScanSuccess(decodedText, decodedResult) {
+  // Debounce: ignora o mesmo código por 3 segundos
+  var now = Date.now();
+  if (decodedText === lastScanned && now - lastScannedTime < 3000) return;
+  lastScanned     = decodedText;
+  lastScannedTime = now;
+
+  // Flash visual
+  var flash = document.getElementById('cam-result-flash');
+  if (flash) {
+    flash.style.opacity = '1';
+    setTimeout(function() { flash.style.opacity = '0'; }, 300);
+  }
+
+  camStatus('✅ Código lido: ' + decodedText, 'ok');
+
+  // Vibração haptic (celular)
+  if (navigator.vibrate) { navigator.vibrate([80, 40, 80]); }
+
+  // Fecha câmera e processa o pacote
+  closeCamera();
+
+  // Preenche o campo e processa
+  var input = document.getElementById('scanInput');
+  if (input) { input.value = decodedText; }
+
+  showToast('📷 Código capturado: ' + decodedText, 'i');
+
+  // Pequeno delay para garantir que o modal fechou antes de processar
+  setTimeout(function() { processScan(decodedText); }, 200);
+}
+
+function onScanError(errorMessage) {
+  // Erros de "não encontrou código" são normais — não exibe
+  // Só exibe erros reais de câmera
+  if (errorMessage && errorMessage.indexOf('NotFoundException') < 0) {
+    console.debug('Scan error (normal):', errorMessage);
+  }
+}
+
+function closeCamera() {
+  if (html5QrCode && camRunning) {
+    html5QrCode.stop().then(function() {
+      html5QrCode.clear();
+      html5QrCode = null;
+      camRunning  = false;
+    }).catch(function(e) {
+      console.warn('Stop error:', e);
+      try { html5QrCode.clear(); } catch(ex) {}
+      html5QrCode = null;
+      camRunning  = false;
+    });
+  }
+  closeModal('camModal');
+  var btn = document.getElementById('camBtn');
+  if (btn) { btn.textContent = '📷 Câmera'; btn.classList.remove('active'); }
+}
+
+function switchCamera() {
+  camFacingMode = camFacingMode === 'environment' ? 'user' : 'environment';
+  var label = camFacingMode === 'environment' ? '(Traseira)' : '(Frontal)';
+  camStatus('🔄 Trocando para câmera ' + label + '...', '');
+  closeCamera();
+  setTimeout(function() { openCamera(); }, 600);
+}
+
+function camStatus(msg, cls) {
+  var el = document.getElementById('cam-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = cls ? 'err' === cls ? '' : '' : '';
+  if (cls === 'ok')  el.style.color = '#00a650';
+  else if (cls === 'err') el.style.color = '#e53935';
+  else el.style.color = '#9CA3AF';
+}
+</script>
+</body>
+</html>
