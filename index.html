@@ -1035,54 +1035,80 @@ input,select,textarea{-webkit-appearance:none}
    LOGIN
 =================================================================== */
 var SESSION_KEY  = 'ses3_auth';
+var SESSION_KEY2 = 'ses3_key';
+
+/* ---- XOR cipher: data.json fica criptografado, ilegivel sem a senha ---- */
+function xorCipher(str, key) {
+  var out = '';
+  for (var i = 0; i < str.length; i++) {
+    out += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+  }
+  return out;
+}
+function encryptData(jsonStr, key) {
+  var b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+  return btoa(xorCipher(b64, key));
+}
+function decryptData(enc, key) {
+  var xored = atob(enc);
+  var b64   = xorCipher(xored, key);
+  return decodeURIComponent(escape(atob(b64)));
+}
+/* ------------------------------------------------------------------------ */
 
 function simpleHash(str) {
   var result = '';
-  for (var i = 0; i < str.length; i++) {
-    result += str.charCodeAt(i).toString(16);
-  }
+  for (var i = 0; i < str.length; i++) { result += str.charCodeAt(i).toString(16); }
   return result;
 }
 
 function doLogin() {
   var pwd = (document.getElementById('login-pwd') || {}).value || '';
   var err = document.getElementById('login-error');
-  if (!pwd.trim()) {
-    if (err) { err.textContent = 'Digite a senha.'; }
-    return;
-  }
+  if (!pwd.trim()) { if (err) err.textContent = 'Digite a senha.'; return; }
   if (err) err.textContent = 'Verificando...';
 
   var rawUrl = 'https://raw.githubusercontent.com/gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3/main/data.json?t=' + Date.now();
-
   var xhr = new XMLHttpRequest();
   xhr.open('GET', rawUrl, true);
   xhr.onload = function() {
     if (xhr.status === 200) {
       try {
-        var data = JSON.parse(xhr.responseText);
-        var storedHash = data.pwd || '';
-        if (storedHash && simpleHash(pwd) === storedHash) {
+        var file = JSON.parse(xhr.responseText);
+        var authenticated = false;
+
+        if (file.enc) {
+          /* novo formato: tenta descriptografar com a senha digitada */
+          try {
+            var dec = decryptData(file.enc, pwd);
+            JSON.parse(dec);  /* valida se o JSON resultante e valido */
+            authenticated = true;
+          } catch(e) { authenticated = false; }
+        } else if (file.pwd) {
+          /* formato legado com hash */
+          authenticated = (simpleHash(pwd) === file.pwd);
+        }
+
+        if (authenticated) {
           sessionStorage.setItem(SESSION_KEY, '1');
+          sessionStorage.setItem(SESSION_KEY2, pwd);
           var screen = document.getElementById('login-screen');
           if (screen) screen.style.display = 'none';
           if (err) err.textContent = '';
           appInit();
         } else {
-          if (err) { err.textContent = 'Senha incorreta.'; }
+          if (err) err.textContent = 'Senha incorreta.';
           var inp = document.getElementById('login-pwd');
           if (inp) { inp.value = ''; inp.focus(); inp.style.borderColor = '#e53935'; setTimeout(function() { inp.style.borderColor = '#E5E7EB'; }, 1500); }
         }
       } catch(e) {
-        if (err) { err.textContent = 'Erro ao verificar senha. Tente novamente.'; }
+        if (err) err.textContent = 'Erro ao verificar. Tente novamente.';
       }
     } else {
-      if (err) { err.textContent = 'Erro de conexao. Verifique sua internet.'; }
+      if (err) err.textContent = 'Erro de conexao. Verifique sua internet.';
     }
   };
-  xhr.onerror = function() {
-    if (err) { err.textContent = 'Sem conexao. Tente novamente.'; }
-  };
+  xhr.onerror = function() { if (err) err.textContent = 'Sem conexao. Tente novamente.'; };
   xhr.send();
 }
 
@@ -1153,19 +1179,22 @@ function ghUrl() {
 }
 
 function doSync() {
-  if (!cfg.token) {
-    setSyncUI('nocfg');
-    return Promise.resolve();
-  }
+  if (!cfg.token) { setSyncUI('nocfg'); return Promise.resolve(); }
+  var key = sessionStorage.getItem(SESSION_KEY2) || '';
   setSyncUI('spin');
   return fetch(ghUrl(), { headers: ghHeaders() })
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
       var decoded = atob(f.content.replace(/\n/g, ''));
-      var data = JSON.parse(decoded);
+      var file = JSON.parse(decoded);
+      var data;
+      if (file.enc && key) {
+        try { data = JSON.parse(decryptData(file.enc, key)); } catch(e) { data = {}; }
+      } else if (Array.isArray(file)) {
+        data = file;
+      } else {
+        data = file;
+      }
       if (Array.isArray(data)) {
         pkgs = data;
         localStorage.setItem('pkg_data', JSON.stringify(pkgs));
@@ -1182,35 +1211,42 @@ function doSync() {
       setSyncUI('ok');
       refreshAll();
     })
-    .catch(function(e) {
-      console.warn('Sync error:', e);
-      setSyncUI('err');
-    });
+    .catch(function(e) { console.warn('Sync error:', e); setSyncUI('err'); });
+}
+
+function showSaveError(msg) {
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e53935;color:#fff;padding:12px 20px;border-radius:10px;font-size:0.85rem;font-weight:700;z-index:9999;max-width:320px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
+  t.textContent = msg || 'Erro ao salvar no GitHub';
+  document.body.appendChild(t);
+  setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 5000);
 }
 
 function saveGH() {
-  if (!cfg.token) return Promise.resolve();
+  if (!cfg.token) { showSaveError('Token nao configurado. Abra as configuracoes.'); return Promise.resolve(); }
+  var key = sessionStorage.getItem(SESSION_KEY2) || '';
   return fetch(ghUrl(), { headers: ghHeaders() })
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
       var sha = f.sha;
-      var allData = { pkgs: pkgs, nexSessions: nexSessions, faltanteReg: faltanteReg, voandoReg: voandoReg };
-      var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(allData))));
+      var voandoStrip = (voandoReg || []).map(function(v) {
+        /* strip photos se o payload ficar gigante */
+        var copy = JSON.parse(JSON.stringify(v));
+        if (copy.photo && copy.photo.length > 60000) { copy.photo = ''; }
+        return copy;
+      });
+      var allData = { pkgs: pkgs, nexSessions: nexSessions, faltanteReg: faltanteReg, voandoReg: voandoStrip };
+      var jsonStr = JSON.stringify(allData);
+      var fileObj = key ? { enc: encryptData(jsonStr, key) } : allData;
+      var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(fileObj))));
       return fetch(ghUrl(), {
         method: 'PUT',
         headers: ghHeaders(),
-        body: JSON.stringify({
-          message: 'update ' + new Date().toISOString(),
-          content: encoded,
-          sha: sha
-        })
+        body: JSON.stringify({ message: 'update ' + new Date().toISOString(), content: encoded, sha: sha })
       });
     })
     .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ' ' + t); }); }
     });
 }
 
@@ -1219,12 +1255,12 @@ function persist() {
   setSyncUI('spin');
   saveGH()
     .then(function() { setSyncUI('ok'); })
-    .catch(function() { setSyncUI('err'); });
+    .catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar: ' + (e && e.message ? e.message : 'verifique o token')); });
 }
 
 function persistNex() {
   localStorage.setItem('nex_data', JSON.stringify(nexSessions));
-  saveGH();
+  saveGH().catch(function(e) { showSaveError('Erro ao salvar NEX: ' + (e && e.message ? e.message : '')); });
 }
 
 function setSyncUI(state) {
@@ -2823,7 +2859,7 @@ function buildFacSelects(prefix, containerId) {
    FALTANTE REGISTRATION
 =================================================================== */
 var faltanteReg = JSON.parse(localStorage.getItem('faltante_reg') || '[]');
-function persistFaltanteReg() { localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg)); saveGH(); }
+function persistFaltanteReg() { localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg)); saveGH().catch(function(e) { showSaveError('Erro ao salvar Faltante: ' + (e && e.message ? e.message : '')); }); }
 
 function initFaltanteReg() {
   var now = new Date();
@@ -2885,7 +2921,7 @@ function renderFaltanteRegTable() {
 =================================================================== */
 var voandoReg = JSON.parse(localStorage.getItem('voando_reg') || '[]');
 var voaPhotoData = null;
-function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(voandoReg)); saveGH(); }
+function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(voandoReg)); saveGH().catch(function(e) { showSaveError('Erro ao salvar Voando: ' + (e && e.message ? e.message : '')); }); }
 
 function previewVoaPhoto(input) {
   if (!input.files || !input.files[0]) return;
