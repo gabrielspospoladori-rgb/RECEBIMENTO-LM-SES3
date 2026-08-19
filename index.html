@@ -2930,8 +2930,8 @@ function previewVoaPhoto(input) {
   reader.onload = function(e) {
     var img = new Image();
     img.onload = function() {
-      // Compress: max 400px wide/tall, JPEG 0.5
-      var maxDim = 400;
+      /* Compress agressivo: max 200px, JPEG 0.3 — garante arquivo pequeno */
+      var maxDim = 200;
       var w = img.width;
       var h = img.height;
       if (w > maxDim || h > maxDim) {
@@ -2942,14 +2942,23 @@ function previewVoaPhoto(input) {
       canvas.width = w; canvas.height = h;
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
-      voaPhotoData = canvas.toDataURL('image/jpeg', 0.5);
-
+      var data = canvas.toDataURL('image/jpeg', 0.3);
+      /* se ainda grande, reduz mais */
+      if (data.length > 30000) {
+        var c2 = document.createElement('canvas');
+        c2.width = Math.round(w * 0.6); c2.height = Math.round(h * 0.6);
+        var cx2 = c2.getContext('2d');
+        cx2.drawImage(canvas, 0, 0, c2.width, c2.height);
+        data = c2.toDataURL('image/jpeg', 0.25);
+      }
+      voaPhotoData = data;
       var prevImg = document.getElementById('voa-photo-img');
       var prevDiv = document.getElementById('voa-photo-preview');
       var nm      = document.getElementById('voa-photo-name');
       if (prevImg) prevImg.src = voaPhotoData;
       if (prevDiv) prevDiv.style.display = 'block';
-      if (nm)      nm.textContent = file.name + ' (comprimido)';
+      var kb = Math.round(voaPhotoData.length * 0.75 / 1024);
+      if (nm)      nm.textContent = file.name + ' (' + kb + 'KB)';
     };
     img.src = e.target.result;
   };
