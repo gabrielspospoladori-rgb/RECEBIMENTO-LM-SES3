@@ -1114,6 +1114,13 @@ function doLogin() {
 
 function checkAuth() {
   if (sessionStorage.getItem(SESSION_KEY) === '1') {
+    /* se a chave de criptografia sumiu (ex: aba nova), forca re-login */
+    if (!sessionStorage.getItem(SESSION_KEY2)) {
+      sessionStorage.removeItem(SESSION_KEY);
+      var inp2 = document.getElementById('login-pwd');
+      if (inp2) setTimeout(function(){inp2.focus();}, 100);
+      return false;
+    }
     var screen = document.getElementById('login-screen');
     if (screen) screen.style.display = 'none';
     return true;
@@ -1260,7 +1267,8 @@ function persist() {
 
 function persistNex() {
   localStorage.setItem('nex_data', JSON.stringify(nexSessions));
-  saveGH().catch(function(e) { showSaveError('Erro ao salvar NEX: ' + (e && e.message ? e.message : '')); });
+  setSyncUI('spin');
+  saveGH().then(function(){ setSyncUI('ok'); }).catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar NEX: ' + (e && e.message ? e.message : '')); });
 }
 
 function setSyncUI(state) {
@@ -2859,7 +2867,7 @@ function buildFacSelects(prefix, containerId) {
    FALTANTE REGISTRATION
 =================================================================== */
 var faltanteReg = JSON.parse(localStorage.getItem('faltante_reg') || '[]');
-function persistFaltanteReg() { localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg)); saveGH().catch(function(e) { showSaveError('Erro ao salvar Faltante: ' + (e && e.message ? e.message : '')); }); }
+function persistFaltanteReg() { localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg)); setSyncUI('spin'); saveGH().then(function(){ setSyncUI('ok'); }).catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar Faltante: ' + (e && e.message ? e.message : '')); }); }
 
 function initFaltanteReg() {
   var now = new Date();
@@ -2921,7 +2929,7 @@ function renderFaltanteRegTable() {
 =================================================================== */
 var voandoReg = JSON.parse(localStorage.getItem('voando_reg') || '[]');
 var voaPhotoData = null;
-function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(voandoReg)); saveGH().catch(function(e) { showSaveError('Erro ao salvar Voando: ' + (e && e.message ? e.message : '')); }); }
+function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(voandoReg)); setSyncUI('spin'); saveGH().then(function(){ setSyncUI('ok'); }).catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar Voando: ' + (e && e.message ? e.message : '')); }); }
 
 function previewVoaPhoto(input) {
   if (!input.files || !input.files[0]) return;
