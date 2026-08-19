@@ -961,16 +961,32 @@ input,select,textarea{-webkit-appearance:none}
 </div>
 
 <!-- MODAL: Config GitHub -->
+<div class="overlay" id="scanDetailsModal">
+  <div class="modal" style="max-width:440px">
+    <div class="mhd">📷 Confirmar recebimento pela câmera</div>
+    <div style="background:#FFF9C4;border:1px solid #F4D800;border-radius:8px;padding:9px 11px;margin-bottom:12px;font-size:0.76rem"><b>ID lido:</b> <span id="sd-package-id" style="font-family:monospace;font-weight:900"></span></div>
+    <div class="mfield"><label>Triador / Responsável *</label><input id="sd-receiver" placeholder="Nome do triador" autocomplete="name"></div>
+    <div class="mfield"><label>Motorista *</label><input id="sd-driver" placeholder="Nome do motorista" autocomplete="name"></div>
+    <div class="mfield"><label>Placa do veículo *</label><input id="sd-plate" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase" autocomplete="off"></div>
+    <div id="sd-status" style="min-height:18px;margin-top:4px;font-size:0.74rem;font-weight:700;color:#e53935"></div>
+    <div class="mft">
+      <button class="fbtn prim" onclick="confirmCameraScan()">✅ Confirmar e salvar</button>
+      <button class="fbtn" onclick="cancelCameraScan()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="cfgModal">
   <div class="modal" style="max-width:440px">
     <div class="mhd">⚙️ Configurar GitHub</div>
-    <div class="warn-box">⚠️ O token fica salvo apenas no seu navegador (localStorage). Use um PAT com escopo <code>repo</code>.</div>
+    <div class="warn-box">⚠️ O token fica salvo apenas neste aparelho. Use um token restrito ao repositório com permissão <code>Contents: Read and write</code>.</div>
     <div class="mfield"><label>GitHub Token (PAT)</label><input type="password" id="cfg-token" placeholder="github_pat_..."></div>
     <div class="mfield"><label>Repositório (usuario/repo)</label><input id="cfg-repo" placeholder="meu-usuario/meu-repositorio"></div>
     <div class="mfield"><label>Arquivo de dados</label><input id="cfg-file" placeholder="data.json"></div>
     <div style="background:#F3F4F6;border-radius:8px;padding:9px 11px;margin-top:8px;font-size:0.72rem;color:#4B5563"><b>Retenção:</b> os registros operacionais são mantidos por 180 dias. Itens sem data válida são preservados para revisão.</div>
+    <div id="cfg-status" style="min-height:18px;margin-top:8px;font-size:0.74rem;font-weight:700"></div>
     <div class="mft">
-      <button class="fbtn prim" onclick="saveCfg()">💾 Salvar e Sincronizar</button>
+      <button class="fbtn prim" id="cfg-save-btn" onclick="saveCfg()">💾 Validar e Sincronizar</button>
       <button class="fbtn" onclick="closeModal('cfgModal')">Cancelar</button>
     </div>
   </div>
@@ -1456,6 +1472,9 @@ function appInit() {
   var savedRecv  = localStorage.getItem('pkg_recv') || '';
   var savedDrv   = localStorage.getItem('pkg_drv')  || '';
   var savedPlate = localStorage.getItem('pkg_plt')  || '';
+  if (savedRecv === '—') savedRecv = '';
+  if (savedDrv === '—') savedDrv = '';
+  if (savedPlate === '—') savedPlate = '';
   document.getElementById('defReceiver').value = savedRecv;
   document.getElementById('defDriver').value   = savedDrv;
   document.getElementById('defPlate').value    = savedPlate;
@@ -1534,9 +1553,73 @@ function nav(view) {
    SCANNER
 =================================================================== */
 function triggerScan() {
+  if (!ensureWriteConfigured()) return;
   var raw = document.getElementById('scanInput').value.trim();
   if (!raw) { showToast('Digite ou bipe o ID do pacote.', 'w'); return; }
   processScan(raw);
+}
+
+var pendingCameraRaw = null;
+
+function ensureWriteConfigured() {
+  if (cfg.token && cfg.writeValidated === true) return true;
+  showSaveError('Configure a gravacao antes de bipar. Nenhum pacote sera marcado como recebido sem acesso ao banco.');
+  openModal('cfgModal');
+  return false;
+}
+
+function cameraDisplayId(raw) {
+  var id = String(raw || '').trim();
+  try {
+    var obj = JSON.parse(id);
+    if (obj && obj.id) id = String(obj.id);
+  } catch(e) {}
+  return id;
+}
+
+function openCameraScanDetails(raw) {
+  pendingCameraRaw = String(raw || '').trim();
+  var receiver = document.getElementById('defReceiver').value.trim();
+  var driver = document.getElementById('defDriver').value.trim();
+  var plate = document.getElementById('defPlate').value.trim();
+  document.getElementById('sd-package-id').textContent = cameraDisplayId(pendingCameraRaw);
+  document.getElementById('sd-receiver').value = receiver === '—' ? '' : receiver;
+  document.getElementById('sd-driver').value = driver === '—' ? '' : driver;
+  document.getElementById('sd-plate').value = plate === '—' ? '' : plate;
+  document.getElementById('sd-status').textContent = '';
+  openModal('scanDetailsModal');
+  setTimeout(function() {
+    var firstEmpty = !document.getElementById('sd-receiver').value ? document.getElementById('sd-receiver') :
+      (!document.getElementById('sd-driver').value ? document.getElementById('sd-driver') : document.getElementById('sd-plate'));
+    if (firstEmpty) firstEmpty.focus();
+  }, 100);
+}
+
+function confirmCameraScan() {
+  var receiver = document.getElementById('sd-receiver').value.trim();
+  var driver = document.getElementById('sd-driver').value.trim();
+  var plate = document.getElementById('sd-plate').value.trim().toUpperCase();
+  var status = document.getElementById('sd-status');
+  if (!receiver || !driver || !plate) {
+    status.textContent = 'Preencha Triador, Motorista e Placa para continuar.';
+    return;
+  }
+  if (!ensureWriteConfigured()) {
+    status.textContent = 'Valide a configuracao de gravacao e depois confirme novamente.';
+    return;
+  }
+  document.getElementById('defReceiver').value = receiver;
+  document.getElementById('defDriver').value = driver;
+  document.getElementById('defPlate').value = plate;
+  var raw = pendingCameraRaw;
+  closeModal('scanDetailsModal');
+  pendingCameraRaw = null;
+  processScan(raw);
+}
+
+function cancelCameraScan() {
+  pendingCameraRaw = null;
+  closeModal('scanDetailsModal');
 }
 
 function processScan(raw) {
@@ -1628,24 +1711,29 @@ function execScan(id, tag) {
     pkgs.unshift(newPkg);
   }
 
-  persist();
+  var savePromise = persist();
   refreshAll();
 
-  // Feedback
+  // Feedback inicial enquanto aguarda confirmacao remota
   var fb = document.getElementById('scanFb');
-  if (fb) { fb.textContent = '✅ ' + id + ' — ' + now; }
+  if (fb) { fb.textContent = '⏳ Salvando ' + id + '...'; }
   document.getElementById('scanInput').value = '';
   document.getElementById('scanInput').focus();
-  setTimeout(function() {
+  savePromise.then(function(saved) {
     var fb2 = document.getElementById('scanFb');
-    if (fb2) fb2.textContent = '';
-  }, 4000);
-
-  showToast('📦 ' + id + ' recebido! Comprovante gerado.', 's');
-
-  // Auto-abrir comprovante após bipagem
-  var scanId = id;
-  setTimeout(function() { openReceipt(scanId); }, 350);
+    if (saved) {
+      if (fb2) fb2.textContent = '✅ ' + id + ' salvo no banco — ' + now;
+      showToast('📦 ' + id + ' salvo! Comprovante gerado.', 's');
+      setTimeout(function() { openReceipt(id); }, 350);
+    } else {
+      if (fb2) fb2.textContent = '⚠ ' + id + ' ainda nao foi enviado';
+      showToast('⚠ Registro local. Corrija a configuracao para enviar.', 'w');
+    }
+    setTimeout(function() {
+      var fb3 = document.getElementById('scanFb');
+      if (fb3) fb3.textContent = '';
+    }, 5000);
+  });
 }
 
 /* ===================================================================
@@ -2283,13 +2371,60 @@ function saveAddPending() {
    CONFIG
 =================================================================== */
 function saveCfg() {
-  cfg.token = document.getElementById('cfg-token').value.trim();
-  cfg.repo  = document.getElementById('cfg-repo').value.trim();
-  cfg.file  = document.getElementById('cfg-file').value.trim() || 'data.json';
-  localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
-  closeModal('cfgModal');
-  doSync();
-  showToast('⚙️ Configuração salva!', 'i');
+  var token = document.getElementById('cfg-token').value.trim();
+  var repo = document.getElementById('cfg-repo').value.trim();
+  var file = document.getElementById('cfg-file').value.trim() || 'data.json';
+  var status = document.getElementById('cfg-status');
+  var button = document.getElementById('cfg-save-btn');
+  if (!token || !repo) {
+    status.style.color = '#e53935';
+    status.textContent = 'Informe o token e o repositorio.';
+    return Promise.resolve(false);
+  }
+  status.style.color = '#6B7280';
+  status.textContent = 'Validando acesso de leitura e gravacao...';
+  button.disabled = true;
+  var hadPendingChanges = isRemoteDirty();
+  var testUrl = 'https://api.github.com/repos/' + repo + '/contents/' + file;
+  return fetch(testUrl, {
+    cache: 'no-store',
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/vnd.github+json'
+    }
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    cfg.token = token;
+    cfg.repo = repo;
+    cfg.file = file;
+    cfg.writeValidated = false;
+    localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
+    status.style.color = '#00a650';
+    status.textContent = 'Acesso validado. Sincronizando dados pendentes...';
+    return doSync();
+  }).then(function(ok) {
+    if (!ok) throw new Error('Falha ao sincronizar');
+    if (!hadPendingChanges || isRemoteDirty()) {
+      status.textContent = 'Confirmando permissao de gravacao...';
+      return saveGH().then(function() { clearRemoteDirty(); return true; });
+    }
+    return true;
+  }).then(function() {
+    cfg.writeValidated = true;
+    localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
+    closeModal('cfgModal');
+    showToast('✅ Gravação validada e sincronizada!', 's');
+    return true;
+  }).catch(function(e) {
+    cfg.writeValidated = false;
+    localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
+    status.style.color = '#e53935';
+    status.textContent = 'Acesso recusado. Verifique o token e a permissao Contents: Read and write. (' + (e && e.message ? e.message : 'erro') + ')';
+    return false;
+  }).then(function(result) {
+    button.disabled = false;
+    return result;
+  });
 }
 
 /* ===================================================================
@@ -2677,10 +2812,10 @@ function processPhotoScan(input) {
         if (statusEl) { statusEl.textContent = 'Lido: ' + text; statusEl.style.color = '#00a650'; }
         if (navigator.vibrate) { navigator.vibrate([80, 40, 80]); }
         setTimeout(function() {
-          closeCamera();
-          var inp = document.getElementById('scanInput');
-          if (inp) { inp.value = text; }
-          processScan(text);
+           closeCamera();
+           var inp = document.getElementById('scanInput');
+           if (inp) { inp.value = text; }
+           openCameraScanDetails(text);
         }, 600);
       }).catch(function(err) {
         if (statusEl) { statusEl.textContent = 'Nao encontrado. Tente foto mais proxima.'; statusEl.style.color = '#e53935'; }
@@ -2695,6 +2830,7 @@ function processPhotoScan(input) {
 
 function openCamera() {
   if (camRunning) { closeCamera(); return; }
+  if (!ensureWriteConfigured()) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     alert('Camera nao suportada. Use Safari iOS 14+ ou Chrome Android.');
     return;
@@ -2738,10 +2874,10 @@ function openCamera() {
       camStatus('Lido: ' + text, 'ok');
 
       setTimeout(function() {
-        closeCamera();
-        var inp = document.getElementById('scanInput');
-        if (inp) { inp.value = text; }
-        processScan(text);
+         closeCamera();
+         var inp = document.getElementById('scanInput');
+         if (inp) { inp.value = text; }
+         openCameraScanDetails(text);
       }, 400);
     }
     // NotFoundException fires on every empty frame — ignore it
