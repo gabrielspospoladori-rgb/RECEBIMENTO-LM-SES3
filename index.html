@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#FFE600">
 <title>Recebimento de Pacotes | Última Milha</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -282,6 +285,96 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .toast.show{transform:translateY(0);opacity:1}
 .toast.s{background:#00a650;color:#fff}.toast.i{background:#3483FA;color:#fff}
 .toast.d{background:#e53935;color:#fff}.toast.w{background:#f59e0b;color:#1C1C1E}
+
+/* ===================================================================
+   iOS SAFARI GLOBAL FIXES
+=================================================================== */
+body{-webkit-text-size-adjust:100%}
+input,select,textarea{-webkit-appearance:none;border-radius:7px}
+*{-webkit-tap-highlight-color:transparent}
+.tbl-wrap,.main-content{-webkit-overflow-scrolling:touch}
+
+/* ===================================================================
+   MOBILE / iPHONE RESPONSIVE  (max-width: 768px)
+=================================================================== */
+@media(max-width:768px){
+
+  /* --- Topbar --- */
+  .topbar{flex-wrap:wrap;height:auto;padding:8px 10px;gap:6px}
+  .ttitle{display:none}
+  .tsep{display:none}
+  .scan-wrap{order:2;width:100%;margin-left:0;flex-wrap:wrap;gap:6px}
+  .scan-inp{max-width:100%;flex:1;min-width:0;font-size:16px}
+  .meta-inp{flex:1;min-width:80px;font-size:16px}
+  .meta-inp.short{width:auto;flex:1}
+  .tright{order:1;margin-left:auto}
+  .sync-pill span{display:none}
+  .scan-btn,.cam-btn{padding:8px 12px;font-size:0.85rem}
+
+  /* --- Sidebar → bottom tab bar --- */
+  .sidebar{
+    position:fixed;bottom:0;left:0;right:0;top:auto;width:100%;height:auto;
+    z-index:400;flex-direction:row;overflow-x:auto;overflow-y:hidden;
+    padding:0;padding-bottom:env(safe-area-inset-bottom);
+    border-right:none;border-top:2px solid #e5e7eb
+  }
+  .kpi-list{display:none}
+  .nav-sect{display:none}
+  .nav-btn{
+    flex-direction:column;gap:2px;padding:8px 10px;min-width:70px;
+    font-size:0.6rem;border-left:none;border-bottom:3px solid transparent;
+    border-radius:0;justify-content:center;align-items:center;
+    text-align:center;flex:1;width:auto;margin:0
+  }
+  .nav-btn.active{border-bottom-color:#FFE600;border-left:none;background:none;font-weight:800}
+  .nav-ico{font-size:1.2rem}
+  .nbadge{top:2px;right:2px}
+  .sb-footer{display:none}
+
+  /* --- Main content area --- */
+  .body-wrap{flex-direction:column}
+  .main{padding-bottom:calc(70px + env(safe-area-inset-bottom));padding:10px;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+
+  /* --- KPI cards (analytics view) --- */
+  .an-kpis{grid-template-columns:repeat(2,1fr);gap:8px}
+  .an-kpi{padding:10px 12px}
+  .an-val{font-size:1.6rem}
+  .an-lbl{font-size:0.65rem}
+
+  /* --- Tables --- */
+  .dt{min-width:600px}
+  .dt th,.dt td{padding:8px 10px;font-size:0.75rem}
+
+  /* --- Modals → slide up from bottom --- */
+  .overlay{align-items:flex-end;padding:0}
+  .modal{
+    border-radius:20px 20px 0 0;max-height:90vh;overflow-y:auto;
+    width:100%;max-width:100%;-webkit-overflow-scrolling:touch
+  }
+
+  /* Camera modal stays centered */
+  #camModal{align-items:center;padding:16px}
+  #camModal .modal{border-radius:16px;max-width:420px}
+
+  /* Receipt grid single column */
+  #rcModalInner [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr}
+
+  /* All modal inputs get 16px to prevent iOS zoom */
+  .mfield input,.mfield select{font-size:16px}
+
+  /* Section headers */
+  .ph{flex-wrap:wrap;gap:8px}
+  .ph-actions{flex-wrap:wrap}
+  .ttbar{flex-wrap:wrap}
+  .tt-right{flex-wrap:wrap}
+
+  /* Buttons min touch target */
+  .btn,.fbtn,.scan-btn,.cam-btn,.abtn{min-height:40px}
+
+  /* Action buttons column */
+  .abtn{padding:4px 8px;font-size:0.65rem}
+  .dt td:last-child{min-width:120px}
+}
 </style>
 </head>
 <body>
@@ -1950,6 +2043,13 @@ var lastScanned = '';
 var lastScannedTime = 0;
 
 function openCamera() {
+  // iOS Safari requires user gesture for camera — already handled by button click
+  // Add this check:
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Seu navegador não suporta câmera. Use Safari no iOS 14+ ou Chrome no Android.');
+    return;
+  }
+
   // Verifica se a biblioteca está carregada
   if (typeof Html5Qrcode === 'undefined') {
     showToast('⚠️ Biblioteca de câmera não carregou. Verifique a conexão.', 'w');
