@@ -1085,13 +1085,17 @@ function doLogin() {
   if (!pwd.trim()) { if (err) err.textContent = 'Digite a senha.'; return; }
   if (err) err.textContent = 'Verificando...';
 
-  var rawUrl = 'https://raw.githubusercontent.com/gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3/main/data.json?t=' + Date.now();
+  var rawUrl = 'https://api.github.com/repos/gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3/contents/data.json?ref=main&t=' + Date.now();
   var xhr = new XMLHttpRequest();
   xhr.open('GET', rawUrl, true);
+  xhr.setRequestHeader('Accept', 'application/vnd.github+json');
   xhr.onload = function() {
     if (xhr.status === 200) {
       try {
-        var file = JSON.parse(xhr.responseText);
+        var response = JSON.parse(xhr.responseText);
+        var file = response.content
+          ? JSON.parse(decodeURIComponent(escape(atob(response.content.replace(/\n/g, '')))))
+          : response;
         var authenticated = false;
 
         if (file.enc) {
