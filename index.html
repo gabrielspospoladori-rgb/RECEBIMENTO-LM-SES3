@@ -791,12 +791,18 @@ input,select,textarea{-webkit-appearance:none}
 <!-- MODAL: Câmera / Scanner -->
 <div class="overlay" id="camModal" style="display:none">
   <div class="modal" style="background:#111;border-radius:16px;padding:0;overflow:hidden;max-width:420px;width:100%">
-    <div id="cam-header" style="background:#FFE600;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:1.2rem">📷</span>
-        <h3 style="font-size:0.85rem;font-weight:900;color:#1C1C1E;margin:0">Scanner de Código de Barras</h3>
+    <div id="cam-header" style="background:#FFE600;padding:0">
+      <div style="padding:10px 16px 0;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.1rem">📷</span>
+          <span style="font-size:0.85rem;font-weight:900;color:#1C1C1E">Scanner de Código de Barras</span>
+        </div>
+        <button onclick="closeCamera()" style="background:rgba(0,0,0,0.15);border:none;border-radius:6px;padding:4px 10px;font-size:0.8rem;cursor:pointer;font-weight:700">✕ Fechar</button>
       </div>
-      <button onclick="closeCamera()" style="background:rgba(0,0,0,0.15);border:none;border-radius:6px;padding:4px 10px;font-size:0.8rem;cursor:pointer;font-weight:700">✕ Fechar</button>
+      <div style="display:flex;border-top:1px solid rgba(0,0,0,0.1);margin-top:8px">
+        <button id="tab-live" onclick="switchTab('live')" style="flex:1;padding:8px;border:none;background:rgba(0,0,0,0.15);font-size:0.78rem;font-weight:900;color:#1C1C1E;cursor:pointer;border-bottom:3px solid #1C1C1E">📹 Câmera ao Vivo</button>
+        <button id="tab-photo" onclick="switchTab('photo')" style="flex:1;padding:8px;border:none;background:transparent;font-size:0.78rem;font-weight:700;color:rgba(0,0,0,0.55);cursor:pointer;border-bottom:3px solid transparent">🖼️ Enviar Foto</button>
+      </div>
     </div>
     <div id="cam-viewport" style="width:100%;background:#000;position:relative;overflow:hidden">
       <video id="cam-video" autoplay playsinline muted style="width:100%;min-height:300px;display:block;object-fit:cover;position:relative;z-index:1"></video>
@@ -810,6 +816,20 @@ input,select,textarea{-webkit-appearance:none}
         </div>
       </div>
       <div id="cam-result-flash" style="position:absolute;inset:0;background:rgba(0,166,80,0.3);opacity:0;border-radius:4px;transition:opacity .2s;pointer-events:none;z-index:20"></div>
+    </div>
+    <div id="cam-photo-panel" style="display:none;padding:20px 16px;background:#111;min-height:300px;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+      <div style="text-align:center;color:#9CA3AF;font-size:0.8rem;margin-bottom:8px">
+        Tire uma foto do código de barras<br>ou selecione da galeria
+      </div>
+      <label for="cam-file-input" style="display:flex;flex-direction:column;align-items:center;gap:10px;background:#FFE600;color:#1C1C1E;border:none;border-radius:12px;padding:16px 32px;font-size:0.9rem;font-weight:900;cursor:pointer;width:100%;max-width:280px;text-align:center">
+        <span style="font-size:2rem">📸</span>
+        Tirar Foto / Galeria
+      </label>
+      <input type="file" id="cam-file-input" accept="image/*" capture="environment" style="display:none" onchange="processPhotoScan(this)">
+      <div id="cam-photo-preview" style="display:none;width:100%;max-width:320px;border-radius:8px;overflow:hidden">
+        <img id="cam-photo-img" style="width:100%;display:block" src="" alt="preview">
+      </div>
+      <div id="cam-photo-status" style="color:#9CA3AF;font-size:0.78rem;font-weight:600;text-align:center;min-height:24px"></div>
     </div>
     <div id="cam-status" style="background:#111;color:#9CA3AF;font-size:0.72rem;text-align:center;padding:10px 16px;font-weight:600;min-height:38px;display:flex;align-items:center;justify-content:center">
       Iniciando câmera...
@@ -2077,94 +2097,156 @@ var camFacingMode = 'environment';
 var lastScanned = '';
 var lastScannedTime = 0;
 var zxingReader = null;
-var camStream = null;
+var zxingControls = null;
 
 function camStatus(msg, cls) {
   var el = document.getElementById('cam-status');
   if (!el) return;
   el.textContent = msg;
-  el.className = cls || '';
   el.style.color = cls === 'ok' ? '#00a650' : cls === 'err' ? '#e53935' : '#9CA3AF';
+}
+
+var currentCamTab = 'live';
+
+function switchTab(tab) {
+  currentCamTab = tab;
+  var livePanel = document.getElementById('cam-viewport');
+  var photoPanel = document.getElementById('cam-photo-panel');
+  var liveFooter = document.getElementById('cam-footer');
+  var tabLive = document.getElementById('tab-live');
+  var tabPhoto = document.getElementById('tab-photo');
+
+  if (tab === 'live') {
+    if (livePanel) livePanel.style.display = 'block';
+    if (photoPanel) photoPanel.style.display = 'none';
+    if (liveFooter) liveFooter.style.display = 'flex';
+    if (tabLive) { tabLive.style.background = 'rgba(0,0,0,0.15)'; tabLive.style.borderBottomColor = '#1C1C1E'; tabLive.style.color = '#1C1C1E'; tabLive.style.fontWeight = '900'; }
+    if (tabPhoto) { tabPhoto.style.background = 'transparent'; tabPhoto.style.borderBottomColor = 'transparent'; tabPhoto.style.color = 'rgba(0,0,0,0.55)'; tabPhoto.style.fontWeight = '700'; }
+    // Start camera if not running
+    if (!camRunning) {
+      var videoEl = document.getElementById('cam-video');
+      if (videoEl && window.ZXing && zxingReader === null) {
+        openCamera();
+      }
+    }
+  } else {
+    // photo tab
+    if (livePanel) livePanel.style.display = 'none';
+    if (photoPanel) { photoPanel.style.display = 'flex'; }
+    if (liveFooter) liveFooter.style.display = 'none';
+    if (tabLive) { tabLive.style.background = 'transparent'; tabLive.style.borderBottomColor = 'transparent'; tabLive.style.color = 'rgba(0,0,0,0.55)'; tabLive.style.fontWeight = '700'; }
+    if (tabPhoto) { tabPhoto.style.background = 'rgba(0,0,0,0.15)'; tabPhoto.style.borderBottomColor = '#1C1C1E'; tabPhoto.style.color = '#1C1C1E'; tabPhoto.style.fontWeight = '900'; }
+    // Stop live camera if running
+    if (camRunning && zxingReader) {
+      try { zxingReader.reset(); } catch(e) {}
+      zxingReader = null;
+      camRunning = false;
+    }
+  }
+}
+
+function processPhotoScan(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  var statusEl = document.getElementById('cam-photo-status');
+  var previewDiv = document.getElementById('cam-photo-preview');
+  var previewImg = document.getElementById('cam-photo-img');
+
+  if (statusEl) statusEl.textContent = 'Processando imagem...';
+  if (statusEl) statusEl.style.color = '#9CA3AF';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var dataUrl = e.target.result;
+    if (previewImg) previewImg.src = dataUrl;
+    if (previewDiv) previewDiv.style.display = 'block';
+
+    // Decode with ZXing
+    if (!window.ZXing) {
+      if (statusEl) { statusEl.textContent = 'ZXing nao carregado'; statusEl.style.color = '#e53935'; }
+      return;
+    }
+
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      var imgReader = new ZXing.BrowserMultiFormatReader();
+      imgReader.decodeFromCanvas(canvas).then(function(result) {
+        var text = result.getText();
+        if (statusEl) { statusEl.textContent = 'Lido: ' + text; statusEl.style.color = '#00a650'; }
+        if (navigator.vibrate) { navigator.vibrate([80, 40, 80]); }
+        setTimeout(function() {
+          closeCamera();
+          var inp = document.getElementById('scanInput');
+          if (inp) { inp.value = text; }
+          processScan(text);
+        }, 600);
+      }).catch(function(err) {
+        if (statusEl) { statusEl.textContent = 'Nao encontrado. Tente foto mais proxima.'; statusEl.style.color = '#e53935'; }
+      });
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+  // Reset input so same file can be selected again
+  input.value = '';
 }
 
 function openCamera() {
   if (camRunning) { closeCamera(); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert('Câmera não suportada. Use Safari (iOS 14+) ou Chrome (Android).');
+    alert('Camera not supported. Use Safari (iOS 14+) or Chrome (Android).');
     return;
   }
   document.getElementById('camModal').style.display = 'flex';
-  camStatus('Abrindo câmera...', '');
+  switchTab('live');
+  camStatus('Abrindo camera...', '');
 
-  var videoEl = document.getElementById('cam-video');
-  if (!videoEl) { camStatus('Erro: vídeo não encontrado', 'err'); return; }
-
-  var constraints = {
-    video: {
-      facingMode: { ideal: camFacingMode },
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
-    audio: false
-  };
-
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
-    camStream = stream;
-    videoEl.srcObject = stream;
-    videoEl.setAttribute('autoplay', '');
-    videoEl.setAttribute('playsinline', '');
-    videoEl.setAttribute('muted', '');
-    videoEl.play().then(function() {
-      camRunning = true;
-      camStatus('📷 Aponte para o código de barras', '');
-      startZxingDecode(videoEl);
-    }).catch(function(err) {
-      camStatus('Erro ao iniciar vídeo: ' + err, 'err');
-    });
-  }).catch(function(err) {
-    // Fallback: try without facingMode
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(function(stream) {
-      camStream = stream;
-      videoEl.srcObject = stream;
-      videoEl.setAttribute('playsinline', '');
-      videoEl.muted = true;
-      videoEl.play().then(function() {
-        camRunning = true;
-        camStatus('📷 Aponte para o código de barras', '');
-        startZxingDecode(videoEl);
-      }).catch(function(e) {
-        camStatus('Erro ao iniciar vídeo', 'err');
-      });
-    }).catch(function(e) {
-      camStatus('Câmera negada: ' + e, 'err');
-    });
-  });
-}
-
-function startZxingDecode(videoEl) {
   if (!window.ZXing) {
     camStatus('Aguardando ZXing...', '');
-    setTimeout(function() { startZxingDecode(videoEl); }, 500);
+    setTimeout(openCamera, 800);
     return;
   }
-  try {
-    var hints = new Map();
-    var formats = [
-      ZXing.BarcodeFormat.EAN_13,
-      ZXing.BarcodeFormat.EAN_8,
-      ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.QR_CODE,
-      ZXing.BarcodeFormat.DATA_MATRIX,
-      ZXing.BarcodeFormat.ITF,
-      ZXing.BarcodeFormat.UPC_A,
-      ZXing.BarcodeFormat.UPC_E
-    ];
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
 
-    zxingReader = new ZXing.BrowserMultiFormatReader(hints);
-    zxingReader.decodeFromVideoElement(videoEl, function(result, err) {
+  if (zxingReader) {
+    try { if (zxingControls) { zxingControls.stop(); zxingControls = null; } zxingReader.reset(); } catch(e) {}
+    zxingReader = null;
+  }
+
+  zxingReader = new ZXing.BrowserMultiFormatReader();
+
+  zxingReader.listVideoInputDevices().then(function(devices) {
+    if (!devices || devices.length === 0) {
+      camStatus('Nenhuma camera encontrada', 'err');
+      return;
+    }
+
+    // Pick back camera: prefer label with 'back', 'rear', 'traseira', else last device
+    var deviceId = devices[0].deviceId;
+    if (camFacingMode === 'environment') {
+      for (var i = 0; i < devices.length; i++) {
+        var lbl = (devices[i].label || '').toLowerCase();
+        if (lbl.indexOf('back') >= 0 || lbl.indexOf('rear') >= 0 || lbl.indexOf('traseira') >= 0 || lbl.indexOf('environment') >= 0) {
+          deviceId = devices[i].deviceId;
+          break;
+        }
+      }
+      // On iOS, last device is usually the back camera
+      if (devices.length > 1) deviceId = devices[devices.length - 1].deviceId;
+    } else {
+      // front camera: first device is usually front
+      deviceId = devices[0].deviceId;
+    }
+
+    camRunning = true;
+    camStatus('Aponte para o codigo de barras', '');
+
+    zxingReader.decodeFromVideoDevice(deviceId, 'cam-video', function(result, err) {
       if (result) {
         var text = result.getText();
         var now = Date.now();
@@ -2172,52 +2254,40 @@ function startZxingDecode(videoEl) {
         lastScanned = text;
         lastScannedTime = now;
 
-        // Flash effect
         var flash = document.getElementById('cam-result-flash');
         if (flash) { flash.style.opacity = '1'; setTimeout(function() { flash.style.opacity = '0'; }, 400); }
-
-        // Haptic feedback
         if (navigator.vibrate) { navigator.vibrate([80, 40, 80]); }
 
-        camStatus('✅ Lido: ' + text, 'ok');
+        camStatus('Lido: ' + text, 'ok');
 
         setTimeout(function() {
           closeCamera();
-          // Put value in scan input and process
           var inp = document.getElementById('scanInput');
-          if (inp) {
-            inp.value = text;
-            inp.focus();
-          }
+          if (inp) { inp.value = text; }
           processScan(text);
         }, 400);
       }
+      // ignore NotFoundException - it fires on every frame with no barcode
     });
-  } catch(e) {
-    camStatus('Erro ZXing: ' + e, 'err');
-  }
+
+  }).catch(function(err) {
+    camRunning = false;
+    camStatus('Erro ao acessar camera: ' + err, 'err');
+  });
 }
 
 function closeCamera() {
   camRunning = false;
-  // Stop ZXing
+  if (zxingControls) {
+    try { zxingControls.stop(); } catch(e) {}
+    zxingControls = null;
+  }
   if (zxingReader) {
     try { zxingReader.reset(); } catch(e) {}
     zxingReader = null;
   }
-  // Stop media stream tracks
-  if (camStream) {
-    var tracks = camStream.getTracks();
-    for (var i = 0; i < tracks.length; i++) { tracks[i].stop(); }
-    camStream = null;
-  }
-  // Clear video
-  var videoEl = document.getElementById('cam-video');
-  if (videoEl) { videoEl.srcObject = null; }
-  // Hide modal
   var modal = document.getElementById('camModal');
   if (modal) { modal.style.display = 'none'; }
-  // Reset button
   var btn = document.getElementById('cam-btn');
   if (btn) { btn.classList.remove('active'); }
 }
@@ -2226,7 +2296,7 @@ function switchCamera() {
   camFacingMode = camFacingMode === 'environment' ? 'user' : 'environment';
   if (camRunning) {
     closeCamera();
-    setTimeout(function() { openCamera(); }, 300);
+    setTimeout(function() { openCamera(); }, 400);
   }
 }
 </script>
