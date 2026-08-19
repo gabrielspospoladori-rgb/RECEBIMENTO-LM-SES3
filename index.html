@@ -1034,7 +1034,6 @@ input,select,textarea{-webkit-appearance:none}
 /* ===================================================================
    LOGIN
 =================================================================== */
-var APP_PWD_HASH = '4c423236'; // hex of 'LB26' — simple obfuscation
 var SESSION_KEY  = 'ses3_auth';
 
 function simpleHash(str) {
@@ -1048,17 +1047,43 @@ function simpleHash(str) {
 function doLogin() {
   var pwd = (document.getElementById('login-pwd') || {}).value || '';
   var err = document.getElementById('login-error');
-  if (simpleHash(pwd) === APP_PWD_HASH) {
-    sessionStorage.setItem(SESSION_KEY, '1');
-    var screen = document.getElementById('login-screen');
-    if (screen) screen.style.display = 'none';
-    if (err) err.textContent = '';
-    appInit();
-  } else {
-    if (err) err.textContent = 'Senha incorreta. Tente novamente.';
-    var inp = document.getElementById('login-pwd');
-    if (inp) { inp.value = ''; inp.focus(); inp.style.borderColor='#e53935'; setTimeout(function(){inp.style.borderColor='#E5E7EB';},1500); }
+  if (!pwd.trim()) {
+    if (err) { err.textContent = 'Digite a senha.'; }
+    return;
   }
+  if (err) err.textContent = 'Verificando...';
+
+  var rawUrl = 'https://raw.githubusercontent.com/gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3/main/data.json?t=' + Date.now();
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', rawUrl, true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      try {
+        var data = JSON.parse(xhr.responseText);
+        var storedHash = data.pwd || '';
+        if (storedHash && simpleHash(pwd) === storedHash) {
+          sessionStorage.setItem(SESSION_KEY, '1');
+          var screen = document.getElementById('login-screen');
+          if (screen) screen.style.display = 'none';
+          if (err) err.textContent = '';
+          appInit();
+        } else {
+          if (err) { err.textContent = 'Senha incorreta.'; }
+          var inp = document.getElementById('login-pwd');
+          if (inp) { inp.value = ''; inp.focus(); inp.style.borderColor = '#e53935'; setTimeout(function() { inp.style.borderColor = '#E5E7EB'; }, 1500); }
+        }
+      } catch(e) {
+        if (err) { err.textContent = 'Erro ao verificar senha. Tente novamente.'; }
+      }
+    } else {
+      if (err) { err.textContent = 'Erro de conexao. Verifique sua internet.'; }
+    }
+  };
+  xhr.onerror = function() {
+    if (err) { err.textContent = 'Sem conexao. Tente novamente.'; }
+  };
+  xhr.send();
 }
 
 function checkAuth() {
