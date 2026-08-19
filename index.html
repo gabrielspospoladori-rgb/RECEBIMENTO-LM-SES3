@@ -968,6 +968,7 @@ input,select,textarea{-webkit-appearance:none}
     <div class="mfield"><label>GitHub Token (PAT)</label><input type="password" id="cfg-token" placeholder="github_pat_..."></div>
     <div class="mfield"><label>Repositório (usuario/repo)</label><input id="cfg-repo" placeholder="meu-usuario/meu-repositorio"></div>
     <div class="mfield"><label>Arquivo de dados</label><input id="cfg-file" placeholder="data.json"></div>
+    <div style="background:#F3F4F6;border-radius:8px;padding:9px 11px;margin-top:8px;font-size:0.72rem;color:#4B5563"><b>Retenção:</b> os registros operacionais são mantidos por 180 dias. Itens sem data válida são preservados para revisão.</div>
     <div class="mft">
       <button class="fbtn prim" onclick="saveCfg()">💾 Salvar e Sincronizar</button>
       <button class="fbtn" onclick="closeModal('cfgModal')">Cancelar</button>
@@ -1205,6 +1206,7 @@ function validateRemoteData(data) {
 
 var REMOTE_DIRTY_KEY = 'pkg_remote_dirty_v2';
 var SYNC_MIGRATION_KEY = 'pkg_sync_recovery_v2';
+var DATA_RETENTION_DAYS = 180;
 
 function isRemoteDirty() {
   return localStorage.getItem(REMOTE_DIRTY_KEY) === '1';
@@ -1242,6 +1244,52 @@ function mergeRecordArrays(remoteItems, localItems) {
   return result;
 }
 
+function parseRetentionDate(value) {
+  if (!value || value === '—') return null;
+  var text = String(value).trim();
+  var br = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/.exec(text);
+  var date;
+  if (br) date = new Date(Number(br[3]), Number(br[2]) - 1, Number(br[1]), Number(br[4] || 0), Number(br[5] || 0));
+  else date = new Date(text);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function retentionTimestamp(item, type) {
+  if (!item) return null;
+  var values = type === 'pkg' ? [item.ts, item.receivedAt, item.pendingDate] : [item.createdAt, item.date];
+  var latest = null;
+  for (var i = 0; i < values.length; i++) {
+    var date = parseRetentionDate(values[i]);
+    if (date && (!latest || date.getTime() > latest.getTime())) latest = date;
+  }
+  return latest ? latest.getTime() : null;
+}
+
+function applyDataRetention() {
+  var cutoff = Date.now() - (DATA_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  var removed = 0;
+  function keepRecent(items, type) {
+    return (items || []).filter(function(item) {
+      var timestamp = retentionTimestamp(item, type);
+      var keep = timestamp === null || timestamp >= cutoff;
+      if (!keep) removed++;
+      return keep;
+    });
+  }
+  pkgs = keepRecent(pkgs, 'pkg');
+  nexSessions = keepRecent(nexSessions, 'other');
+  faltanteReg = keepRecent(faltanteReg, 'other');
+  voandoReg = keepRecent(voandoReg, 'other');
+  return removed;
+}
+
+function storeAllLocalData() {
+  localStorage.setItem('pkg_data', JSON.stringify(pkgs));
+  localStorage.setItem('nex_data', JSON.stringify(nexSessions));
+  localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg));
+  localStorage.setItem('voando_reg', JSON.stringify(voandoReg));
+}
+
 function doSync() {
   var key = sessionStorage.getItem(SESSION_KEY2) || '';
   var hasToken = !!cfg.token;
@@ -1275,19 +1323,16 @@ function doSync() {
       var keepLocalChanges = isRemoteDirty() || recoverLegacyLocal;
       if (Array.isArray(data)) {
         pkgs = keepLocalChanges ? mergeRecordArrays(data, localPkgs) : data;
-        localStorage.setItem('pkg_data', JSON.stringify(pkgs));
       } else {
         pkgs         = keepLocalChanges ? mergeRecordArrays(data.pkgs || [], localPkgs) : (data.pkgs || []);
         nexSessions  = keepLocalChanges ? mergeRecordArrays(data.nexSessions || [], localNex) : (data.nexSessions || []);
         faltanteReg  = keepLocalChanges ? mergeRecordArrays(data.faltanteReg || [], localFaltante) : (data.faltanteReg || []);
         voandoReg    = keepLocalChanges ? mergeRecordArrays(data.voandoReg || [], localVoando) : (data.voandoReg || []);
-        localStorage.setItem('pkg_data',     JSON.stringify(pkgs));
-        localStorage.setItem('nex_data',     JSON.stringify(nexSessions));
-        localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg));
-        localStorage.setItem('voando_reg',   JSON.stringify(voandoReg));
       }
+      var retentionRemoved = applyDataRetention();
+      storeAllLocalData();
       localStorage.setItem(SYNC_MIGRATION_KEY, '1');
-      if (keepLocalChanges) markRemoteDirty();
+      if (keepLocalChanges || retentionRemoved > 0) markRemoteDirty();
       refreshAll();
       if (hasToken && isRemoteDirty()) {
         setSyncUI('spin');
@@ -1329,6 +1374,8 @@ function saveGHAttempt(retryCount) {
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
       var sha = f.sha;
+      var retentionRemoved = applyDataRetention();
+      if (retentionRemoved > 0) { markRemoteDirty(); storeAllLocalData(); }
       var voandoStrip = (voandoReg || []).map(function(v) {
         /* strip photos se o payload ficar gigante */
         var copy = JSON.parse(JSON.stringify(v));
