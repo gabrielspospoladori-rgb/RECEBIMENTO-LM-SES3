@@ -486,6 +486,7 @@ input,select,textarea{-webkit-appearance:none}
     <button class="nav-btn"        id="nl-received" onclick="nav('received')"> <span class="nav-ico">✅</span>Recebidos     <span class="nbadge green hide" id="nb-rec">0</span></button>
     <button class="nav-btn"        id="nl-voando"   onclick="nav('voando')">  <span class="nav-ico">✈️</span>Pacote Voando  <span class="nbadge hide" style="background:#3b82f6" id="nb-voando">0</span></button>
     <button class="nav-btn"        id="nl-faltante" onclick="nav('faltante')"><span class="nav-ico">❓</span>Faltante       <span class="nbadge hide" style="background:#6B7280" id="nb-faltante">0</span></button>
+    <button class="nav-btn" id="nb-achados" onclick="nav('achados')"><span class="nav-icon">🎯</span><span>Achados</span><span class="nav-badge nbadge hide" id="nb-achados-count" style="background:#065f46">0</span></button>
     <div class="nav-sect">Análise</div>
     <button class="nav-btn"        id="nl-analytics" onclick="nav('analytics')"><span class="nav-ico">📊</span>Gráficos</button>
     <div class="nav-section-label" style="padding:10px 12px 4px;font-size:0.58rem;font-weight:700;text-transform:uppercase;color:#9CA3AF;letter-spacing:.5px">NEX</div>
@@ -613,6 +614,46 @@ input,select,textarea{-webkit-appearance:none}
       <div style="background:#EFF6FF;border:1px solid #93c5fd;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;color:#1d4ed8;font-weight:600;display:flex;align-items:center;gap:8px">
         ✈️ Esses pacotes estão em trânsito. Aguarde a chegada para realizar o recebimento.
       </div>
+      <!-- VOANDO REGISTRATION FORM -->
+      <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px;margin-bottom:16px">
+        <div style="font-size:0.78rem;font-weight:800;color:#374151;margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px">✈️ Registrar Pacote Voando</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:130px">
+            <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Data</label>
+            <input id="voaDate" type="text" placeholder="DD/MM/AAAA" readonly style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.82rem;font-family:inherit;background:#F9FAFB">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
+            <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">ID do Pacote</label>
+            <input id="voaPkgId" type="text" placeholder="Bipe ou digite o ID" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-weight:700;font-family:inherit" onkeydown="if(event.key==='Enter')addVoandoReg()">
+          </div>
+        </div>
+        <div id="voa-fac-selects"></div>
+        <div style="margin:10px 0">
+          <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase;display:block;margin-bottom:6px">Foto do Pacote (opcional)</label>
+          <label for="voaPhotoInput" style="display:inline-flex;align-items:center;gap:6px;background:#F3F4F6;border:1.5px dashed #D1D5DB;border-radius:8px;padding:8px 14px;font-size:0.78rem;font-weight:700;color:#374151;cursor:pointer">
+            📸 Anexar Foto
+          </label>
+          <input type="file" id="voaPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="previewVoaPhoto(this)">
+          <span id="voa-photo-name" style="font-size:0.7rem;color:#6B7280;margin-left:8px"></span>
+          <div id="voa-photo-preview" style="display:none;margin-top:8px">
+            <img id="voa-photo-img" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid #E5E7EB" src="" alt="preview">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="addVoandoReg()" style="background:#7C3AED;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:0.82rem;font-weight:900;cursor:pointer;font-family:inherit">✈ Registrar Voando</button>
+        </div>
+        <div id="voa-form-status" style="margin-top:8px;font-size:0.75rem;font-weight:600;min-height:20px"></div>
+      </div>
+      <!-- VOANDO HISTORY TABLE -->
+      <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px;margin-bottom:16px">
+        <div style="font-size:0.78rem;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Histórico de Pacotes Voando</div>
+        <div class="tbl-wrap" style="overflow-x:auto">
+          <table class="data-tbl">
+            <thead><tr><th>DATA</th><th>FACILITY TIPO</th><th>FACILITY</th><th>ID DO PACOTE</th><th>FOTO</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+            <tbody id="voa-reg-body"></tbody>
+          </table>
+        </div>
+      </div>
       <div class="tcard">
         <div style="overflow-x:auto"><table class="dt">
           <thead><tr>
@@ -631,6 +672,35 @@ input,select,textarea{-webkit-appearance:none}
       </div>
       <div style="background:#F3F4F6;border:1px solid #9CA3AF;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;color:#374151;font-weight:600;display:flex;align-items:center;gap:8px">
         ❓ Esses pacotes foram marcados como faltantes. Verifique com o motorista e supervisão.
+      </div>
+      <!-- FALTANTE REGISTRATION FORM -->
+      <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px;margin-bottom:16px">
+        <div style="font-size:0.78rem;font-weight:800;color:#374151;margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px">📋 Registrar Pacote Faltante</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:130px">
+            <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Data</label>
+            <input id="fltDate" type="text" placeholder="DD/MM/AAAA" readonly style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.82rem;font-family:inherit;background:#F9FAFB">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
+            <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">ID do Pacote</label>
+            <input id="fltPkgId" type="text" placeholder="Bipe ou digite o ID" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-weight:700;font-family:inherit" onkeydown="if(event.key==='Enter')addFaltanteReg()">
+          </div>
+        </div>
+        <div id="flt-fac-selects"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="addFaltanteReg()" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:0.82rem;font-weight:900;cursor:pointer;font-family:inherit">📋 Registrar Faltante</button>
+        </div>
+        <div id="flt-form-status" style="margin-top:8px;font-size:0.75rem;font-weight:600;min-height:20px"></div>
+      </div>
+      <!-- FALTANTE HISTORY TABLE -->
+      <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px;margin-bottom:16px">
+        <div style="font-size:0.78rem;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Histórico de Faltantes Registrados</div>
+        <div class="tbl-wrap" style="overflow-x:auto">
+          <table class="data-tbl">
+            <thead><tr><th>DATA</th><th>FACILITY TIPO</th><th>FACILITY</th><th>ID DO PACOTE</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+            <tbody id="flt-reg-body"></tbody>
+          </table>
+        </div>
       </div>
       <div class="tcard">
         <div style="overflow-x:auto"><table class="dt">
@@ -734,6 +804,23 @@ input,select,textarea{-webkit-appearance:none}
 
       </div>
     </div><!-- end view-nex -->
+
+    <!-- VIEW: ACHADOS -->
+    <div id="view-achados" style="display:none">
+      <div class="content-wrap">
+        <div class="section-header">
+          <div>
+            <div class="section-title">🎯 Achados — Pacotes Localizados</div>
+            <div style="font-size:0.72rem;color:#6B7280;margin-top:2px">Pacotes registrados em Faltante E em Voando — cruzamento automático</div>
+          </div>
+        </div>
+        <div id="achados-empty" style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:32px;text-align:center;color:#9CA3AF;font-size:0.85rem">
+          🔍 Nenhum pacote encontrado nos dois registros ainda.<br>
+          <span style="font-size:0.75rem">Quando o mesmo ID aparecer em Faltante e Voando, ele aparecerá aqui.</span>
+        </div>
+        <div id="achados-list" style="display:flex;flex-direction:column;gap:12px"></div>
+      </div>
+    </div><!-- end view-achados -->
 
   </main>
 </div>
@@ -1092,6 +1179,9 @@ window.addEventListener('DOMContentLoaded', function() {
   // Initial render
   refreshAll();
 
+  // Update achados badge on load
+  updateAchadosBadge();
+
   // Sync with GitHub
   if (cfg.token) {
     doSync();
@@ -1104,7 +1194,7 @@ window.addEventListener('DOMContentLoaded', function() {
    NAVIGATION
 =================================================================== */
 function nav(view) {
-  var views = ['grid', 'pending', 'alert', 'received', 'voando', 'faltante', 'analytics', 'nex'];
+  var views = ['grid', 'pending', 'alert', 'received', 'voando', 'faltante', 'analytics', 'nex', 'achados'];
   views.forEach(function(v) {
     var el  = document.getElementById('view-' + v);
     var btn = document.getElementById('nl-' + v);
@@ -1114,16 +1204,20 @@ function nav(view) {
   // NEX button uses id nb-nex (not nl-nex)
   var nexBtn = document.getElementById('nb-nex');
   if (nexBtn) nexBtn.classList.toggle('active', view === 'nex');
+  // Achados button uses id nb-achados (not nl-achados)
+  var achadosBtn = document.getElementById('nb-achados');
+  if (achadosBtn) achadosBtn.classList.toggle('active', view === 'achados');
   activeView = view;
 
   if (view === 'grid')      renderGrid();
   if (view === 'pending')   renderPending();
   if (view === 'alert')     renderAlert();
   if (view === 'received')  renderReceived();
-  if (view === 'voando')    renderVoando();
-  if (view === 'faltante')  renderFaltante();
+  if (view === 'voando')    { renderVoando(); initVoandoReg(); }
+  if (view === 'faltante')  { renderFaltante(); initFaltanteReg(); }
   if (view === 'analytics') { initCharts(); renderAnalytics(); }
   if (view === 'nex')       { initNex(); }
+  if (view === 'achados')   { checkAchados(); }
 }
 
 /* ===================================================================
@@ -2609,6 +2703,267 @@ function renderNexHistory() {
     tr.appendChild(tdAct);
     tbody.appendChild(tr);
   }
+}
+
+/* ===================================================================
+   FACILITY OPTIONS & SELECTORS
+=================================================================== */
+var FACILITY_OPTIONS = { XPT: ['EBA32','EES3','EES2','EES6'], SVC: ['HAWK SVC','ON TIME SVC','DELUNA SVC','PARCEIRO SPOT SVC'], BRNES: ['BRNES464 AVISO','BRNES73 SOORETAMA','BRNES124 GAIVOTAS'] };
+
+function updateFacSub(prefix) {
+  var typeEl = document.getElementById(prefix + 'FacType');
+  var subEl  = document.getElementById(prefix + 'FacSub');
+  if (!typeEl || !subEl) return;
+  var type = typeEl.value;
+  subEl.innerHTML = '';
+  if (!type || !FACILITY_OPTIONS[type]) { subEl.innerHTML = '<option value="">-- selecione o tipo primeiro --</option>'; return; }
+  var defOpt = document.createElement('option');
+  defOpt.value = ''; defOpt.textContent = 'Selecione...'; subEl.appendChild(defOpt);
+  var opts = FACILITY_OPTIONS[type];
+  for (var i = 0; i < opts.length; i++) { var o = document.createElement('option'); o.value = opts[i]; o.textContent = opts[i]; subEl.appendChild(o); }
+}
+
+function buildFacSelects(prefix, containerId) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var typeOpts = '<option value="">Tipo de origem</option><option value="XPT">XPT</option><option value="SVC">SVC (Transportadora)</option><option value="BRNES">BRNES (Agencia)</option>';
+  var html = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
+  html += '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px"><label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Tipo Facility</label>';
+  html += '<select id="' + prefix + 'FacType" onchange="updateFacSub(\'' + prefix + '\')" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.82rem;font-family:inherit">' + typeOpts + '</select></div>';
+  html += '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px"><label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Facility</label>';
+  html += '<select id="' + prefix + 'FacSub" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.82rem;font-family:inherit"><option value="">-- selecione o tipo primeiro --</option></select></div></div>';
+  el.innerHTML = html;
+}
+
+/* ===================================================================
+   FALTANTE REGISTRATION
+=================================================================== */
+var faltanteReg = JSON.parse(localStorage.getItem('faltante_reg') || '[]');
+function persistFaltanteReg() { localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg)); }
+
+function initFaltanteReg() {
+  var now = new Date();
+  var d = document.getElementById('fltDate');
+  if (d) d.value = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear();
+  buildFacSelects('flt', 'flt-fac-selects');
+  renderFaltanteRegTable();
+}
+
+function addFaltanteReg() {
+  var pkgId = (document.getElementById('fltPkgId') || {}).value;
+  var date  = (document.getElementById('fltDate')  || {}).value;
+  var facType = (document.getElementById('fltFacType') || {}).value;
+  var facSub  = (document.getElementById('fltFacSub')  || {}).value;
+  var status = document.getElementById('flt-form-status');
+  if (!pkgId || !pkgId.trim()) { if (status) { status.textContent = 'Informe o ID do pacote.'; status.style.color='#e53935'; } return; }
+  if (!facType) { if (status) { status.textContent = 'Selecione o tipo de facility.'; status.style.color='#e53935'; } return; }
+  if (!facSub)  { if (status) { status.textContent = 'Selecione a facility.'; status.style.color='#e53935'; } return; }
+  var entry = { id: 'FLT-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), createdAt: new Date().toISOString() };
+  faltanteReg.unshift(entry);
+  persistFaltanteReg();
+  document.getElementById('fltPkgId').value = '';
+  if (status) { status.textContent = 'Registrado: ' + pkgId.trim(); status.style.color = '#00a650'; }
+  renderFaltanteRegTable();
+  checkAchados();
+  updateAchadosBadge();
+}
+
+function renderFaltanteRegTable() {
+  var tbody = document.getElementById('flt-reg-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (faltanteReg.length === 0) {
+    var tr = document.createElement('tr'); var td = document.createElement('td'); td.colSpan = 6; td.style.cssText = 'text-align:center;color:#9CA3AF;padding:20px;font-size:0.8rem'; td.textContent = 'Nenhum faltante registrado.'; tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  for (var i = 0; i < faltanteReg.length; i++) {
+    var e = faltanteReg[i];
+    var tr = document.createElement('tr');
+    var isAchado = false;
+    for (var j = 0; j < voandoReg.length; j++) { if (voandoReg[j].packageId === e.packageId) { isAchado = true; break; } }
+    var cells = [e.date, e.facilityType, e.facility, e.packageId];
+    for (var k = 0; k < cells.length; k++) { var td2 = document.createElement('td'); td2.textContent = cells[k]; if (k===3) td2.style.fontWeight='700'; tr.appendChild(td2); }
+    var tdStatus = document.createElement('td');
+    if (isAchado) { var sp = document.createElement('span'); sp.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp.textContent='🎯 Achado'; tdStatus.appendChild(sp); }
+    else { var sp2 = document.createElement('span'); sp2.style.cssText='background:#FEE2E2;color:#991b1b;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp2.textContent='❓ Faltante'; tdStatus.appendChild(sp2); }
+    tr.appendChild(tdStatus);
+    var tdAct = document.createElement('td');
+    var btn = document.createElement('button');
+    btn.style.cssText='background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;cursor:pointer';
+    btn.textContent='🗑';
+    (function(eid) { btn.onclick = function() { faltanteReg = faltanteReg.filter(function(x){return x.id!==eid;}); persistFaltanteReg(); renderFaltanteRegTable(); checkAchados(); updateAchadosBadge(); }; })(e.id);
+    tdAct.appendChild(btn); tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  }
+}
+
+/* ===================================================================
+   VOANDO REGISTRATION
+=================================================================== */
+var voandoReg = JSON.parse(localStorage.getItem('voando_reg') || '[]');
+var voaPhotoData = null;
+function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(voandoReg)); }
+
+function previewVoaPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    voaPhotoData = e.target.result;
+    var prev = document.getElementById('voa-photo-preview');
+    var img  = document.getElementById('voa-photo-img');
+    var nm   = document.getElementById('voa-photo-name');
+    if (img) img.src = voaPhotoData;
+    if (prev) prev.style.display = 'block';
+    if (nm) nm.textContent = input.files[0].name;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function initVoandoReg() {
+  var now = new Date();
+  var d = document.getElementById('voaDate');
+  if (d) d.value = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear();
+  buildFacSelects('voa', 'voa-fac-selects');
+  renderVoandoRegTable();
+}
+
+function addVoandoReg() {
+  var pkgId = (document.getElementById('voaPkgId') || {}).value;
+  var date  = (document.getElementById('voaDate')  || {}).value;
+  var facType = (document.getElementById('voaFacType') || {}).value;
+  var facSub  = (document.getElementById('voaFacSub')  || {}).value;
+  var status  = document.getElementById('voa-form-status');
+  if (!pkgId || !pkgId.trim()) { if (status) { status.textContent = 'Informe o ID do pacote.'; status.style.color='#e53935'; } return; }
+  if (!facType) { if (status) { status.textContent = 'Selecione o tipo de facility.'; status.style.color='#e53935'; } return; }
+  if (!facSub)  { if (status) { status.textContent = 'Selecione a facility.'; status.style.color='#e53935'; } return; }
+  var entry = { id: 'VOA-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), photo: voaPhotoData || null, createdAt: new Date().toISOString() };
+  voandoReg.unshift(entry);
+  persistVoandoReg();
+  document.getElementById('voaPkgId').value = '';
+  voaPhotoData = null;
+  var prev = document.getElementById('voa-photo-preview'); if (prev) prev.style.display = 'none';
+  var nm = document.getElementById('voa-photo-name'); if (nm) nm.textContent = '';
+  var finput = document.getElementById('voaPhotoInput'); if (finput) finput.value = '';
+  if (status) { status.textContent = 'Registrado: ' + pkgId.trim(); status.style.color = '#00a650'; }
+  renderVoandoRegTable();
+  checkAchados();
+  updateAchadosBadge();
+}
+
+function renderVoandoRegTable() {
+  var tbody = document.getElementById('voa-reg-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (voandoReg.length === 0) {
+    var tr = document.createElement('tr'); var td = document.createElement('td'); td.colSpan=7; td.style.cssText='text-align:center;color:#9CA3AF;padding:20px;font-size:0.8rem'; td.textContent='Nenhum pacote voando registrado.'; tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  for (var i = 0; i < voandoReg.length; i++) {
+    var e = voandoReg[i];
+    var tr = document.createElement('tr');
+    var isAchado = false;
+    for (var j = 0; j < faltanteReg.length; j++) { if (faltanteReg[j].packageId === e.packageId) { isAchado=true; break; } }
+    var cells = [e.date, e.facilityType, e.facility, e.packageId];
+    for (var k=0; k<cells.length; k++) { var td2=document.createElement('td'); td2.textContent=cells[k]; if(k===3)td2.style.fontWeight='700'; tr.appendChild(td2); }
+    var tdPhoto = document.createElement('td');
+    if (e.photo) { var img=document.createElement('img'); img.src=e.photo; img.style.cssText='width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #E5E7EB;cursor:pointer'; img.onclick=(function(src){return function(){var w=window.open();w.document.write('<img src="'+src+'" style="max-width:100%">');}})(e.photo); tdPhoto.appendChild(img); } else { tdPhoto.textContent='—'; tdPhoto.style.color='#9CA3AF'; }
+    tr.appendChild(tdPhoto);
+    var tdStatus=document.createElement('td');
+    if (isAchado) { var sp=document.createElement('span'); sp.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp.textContent='🎯 Achado'; tdStatus.appendChild(sp); }
+    else { var sp2=document.createElement('span'); sp2.style.cssText='background:#EDE9FE;color:#5B21B6;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp2.textContent='✈ Voando'; tdStatus.appendChild(sp2); }
+    tr.appendChild(tdStatus);
+    var tdAct=document.createElement('td'); var btn=document.createElement('button'); btn.style.cssText='background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;cursor:pointer'; btn.textContent='🗑';
+    (function(eid){btn.onclick=function(){voandoReg=voandoReg.filter(function(x){return x.id!==eid;});persistVoandoReg();renderVoandoRegTable();checkAchados();updateAchadosBadge();};})(e.id);
+    tdAct.appendChild(btn); tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  }
+}
+
+/* ===================================================================
+   ACHADOS — CROSS-REFERENCE
+=================================================================== */
+function checkAchados() {
+  var list = document.getElementById('achados-list');
+  var empty = document.getElementById('achados-empty');
+  if (!list) return;
+  list.innerHTML = '';
+  var found = [];
+  for (var i=0; i<faltanteReg.length; i++) {
+    var flt = faltanteReg[i];
+    for (var j=0; j<voandoReg.length; j++) {
+      if (voandoReg[j].packageId === flt.packageId) { found.push({ packageId: flt.packageId, flt: flt, voa: voandoReg[j] }); break; }
+    }
+  }
+  if (found.length === 0) { if (empty) empty.style.display='block'; list.style.display='none'; return; }
+  if (empty) empty.style.display='none';
+  list.style.display='flex';
+  for (var k=0; k<found.length; k++) {
+    var item = found[k];
+    var card = document.createElement('div');
+    card.style.cssText='background:#fff;border-radius:12px;border:2px solid #00a650;padding:16px';
+    var header = document.createElement('div');
+    header.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px';
+    var title = document.createElement('div');
+    title.style.cssText='font-size:0.9rem;font-weight:900;color:#065f46';
+    title.textContent = '🎯 ACHADO — ID: ' + item.packageId;
+    var badge = document.createElement('span');
+    badge.style.cssText='background:#D1FAE5;color:#065f46;border-radius:6px;padding:4px 12px;font-size:0.75rem;font-weight:800';
+    badge.textContent='Pacote Localizado';
+    header.appendChild(title); header.appendChild(badge); card.appendChild(header);
+    var grid = document.createElement('div');
+    grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px';
+    var fltBox = document.createElement('div');
+    fltBox.style.cssText='background:#FEF2F2;border-radius:8px;padding:12px;border:1px solid #FECACA';
+    fltBox.innerHTML = '<div style="font-size:0.68rem;font-weight:800;color:#991b1b;text-transform:uppercase;margin-bottom:6px">❓ Registrado como Faltante</div>' +
+      '<div style="font-size:0.78rem;color:#374151"><b>Data:</b> ' + item.flt.date + '</div>' +
+      '<div style="font-size:0.78rem;color:#374151"><b>Facility:</b> ' + item.flt.facilityType + ' — ' + item.flt.facility + '</div>';
+    var voaBox = document.createElement('div');
+    voaBox.style.cssText='background:#F5F3FF;border-radius:8px;padding:12px;border:1px solid #DDD6FE';
+    voaBox.innerHTML = '<div style="font-size:0.68rem;font-weight:800;color:#5B21B6;text-transform:uppercase;margin-bottom:6px">✈ Registrado como Voando</div>' +
+      '<div style="font-size:0.78rem;color:#374151"><b>Data:</b> ' + item.voa.date + '</div>' +
+      '<div style="font-size:0.78rem;color:#374151"><b>Facility:</b> ' + item.voa.facilityType + ' — ' + item.voa.facility + '</div>';
+    if (item.voa.photo) {
+      var imgEl=document.createElement('img'); imgEl.src=item.voa.photo; imgEl.style.cssText='width:60px;height:60px;object-fit:cover;border-radius:6px;margin-top:6px;cursor:pointer;border:1px solid #DDD6FE';
+      imgEl.onclick=(function(src){return function(){var w=window.open();w.document.write('<img src="'+src+'" style="max-width:100%">');}})(item.voa.photo);
+      voaBox.appendChild(imgEl);
+    }
+    grid.appendChild(fltBox); grid.appendChild(voaBox); card.appendChild(grid);
+    var actions = document.createElement('div');
+    actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap';
+    var rptBtn = document.createElement('button');
+    rptBtn.style.cssText='background:#065f46;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:0.78rem;font-weight:900;cursor:pointer;font-family:inherit';
+    rptBtn.textContent='📄 Gerar Relatório';
+    (function(it){ rptBtn.onclick = function() { gerarRelatorioAchado(it); }; })(item);
+    actions.appendChild(rptBtn); card.appendChild(actions);
+    list.appendChild(card);
+  }
+}
+
+function gerarRelatorioAchado(item) {
+  var w = window.open('','_blank','width=700,height=600');
+  if (!w) return;
+  var now = new Date();
+  var nowStr = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  var photoHtml = item.voa.photo ? '<img src="' + item.voa.photo + '" style="max-width:200px;border-radius:8px;margin:10px 0">' : '<i>Sem foto</i>';
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatorio Achado - ' + item.packageId + '</title><style>body{font-family:-apple-system,sans-serif;margin:32px;color:#1C1C1E}.header{background:#FFE600;padding:16px 20px;border-radius:10px;margin-bottom:20px}.title{font-size:1.2rem;font-weight:900}.badge{background:#065f46;color:#fff;padding:4px 12px;border-radius:6px;font-size:0.75rem;font-weight:800}.section{background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:14px;margin-bottom:12px}.section h3{margin:0 0 8px;font-size:0.82rem;text-transform:uppercase;letter-spacing:.5px}.row{display:flex;gap:16px;margin-bottom:4px;font-size:0.85rem}label{font-weight:700;min-width:120px;color:#6B7280}.print-btn{background:#1C1C1E;color:#FFE600;border:none;padding:10px 24px;border-radius:8px;font-size:0.85rem;font-weight:900;cursor:pointer;margin-top:16px}</style></head><body>');
+  w.document.write('<div class="header"><div style="display:flex;align-items:center;justify-content:space-between"><div><div class="title">🎯 Relatório de Pacote Achado</div><div style="font-size:0.75rem;margin-top:4px">Gerado em ' + nowStr + '</div></div><span class="badge">LOCALIZADO</span></div></div>');
+  w.document.write('<div class="section"><h3>Identificação</h3><div class="row"><label>ID do Pacote:</label><span style="font-weight:900;font-size:1rem">' + item.packageId + '</span></div></div>');
+  w.document.write('<div class="section"><h3>❓ Registro Faltante</h3><div class="row"><label>Data:</label><span>' + item.flt.date + '</span></div><div class="row"><label>Tipo Facility:</label><span>' + item.flt.facilityType + '</span></div><div class="row"><label>Facility:</label><span>' + item.flt.facility + '</span></div></div>');
+  w.document.write('<div class="section"><h3>✈ Registro Voando</h3><div class="row"><label>Data:</label><span>' + item.voa.date + '</span></div><div class="row"><label>Tipo Facility:</label><span>' + item.voa.facilityType + '</span></div><div class="row"><label>Facility:</label><span>' + item.voa.facility + '</span></div><div class="row"><label>Foto:</label>' + photoHtml + '</div></div>');
+  w.document.write('<div class="section"><h3>📋 Tratativa Recomendada</h3><p style="font-size:0.85rem;color:#374151">1. Contatar a facility <b>' + item.voa.facility + '</b> para confirmar a localização do pacote.<br>2. Solicitar registros de movimentação no período de ' + item.flt.date + ' a ' + item.voa.date + '.<br>3. Atualizar o status do pacote no sistema após confirmação.<br>4. Acionar responsável da facility ' + item.flt.facility + ' para alinhamento.</p></div>');
+  w.document.write('<button class="print-btn" onclick="window.print()">🖨 Imprimir Relatório</button>');
+  w.document.write('</body></html>');
+  w.document.close();
+  setTimeout(function(){w.print();},500);
+}
+
+function updateAchadosBadge() {
+  var count = 0;
+  for (var i=0; i<faltanteReg.length; i++) {
+    for (var j=0; j<voandoReg.length; j++) {
+      if (voandoReg[j].packageId === faltanteReg[i].packageId) { count++; break; }
+    }
+  }
+  var badge = document.getElementById('nb-achados-count');
+  if (badge) { if (count>0){badge.textContent=count;badge.style.display='inline-flex';}else{badge.style.display='none';} }
 }
 </script>
 </body>
