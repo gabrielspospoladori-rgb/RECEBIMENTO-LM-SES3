@@ -238,6 +238,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .hrs-badge.ok{background:#FEF3C7;color:#92400e}
 .hrs-badge.danger{background:#FEE2E2;color:#991b1b}
 
+/* NEX */
+.content-wrap{padding:0}
+.section-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+.section-title{font-size:1rem;font-weight:900;color:#1C1C1E}
+.data-tbl{width:100%;border-collapse:collapse;font-size:0.8rem}
+.data-tbl thead tr{background:#FAFAFA;border-bottom:2px solid #E5E7EB}
+.data-tbl th{padding:9px 12px;text-align:left;font-size:0.62rem;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.data-tbl tbody tr{border-bottom:1px solid #F4F5F7;transition:background .1s}
+.data-tbl tbody tr:hover{background:#FFFDE7}
+.data-tbl tbody tr:last-child{border:none}
+.data-tbl td{padding:9px 12px;vertical-align:middle}
+
 /* Analytics */
 .an-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
 .an-kpi{background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:12px 14px}
@@ -476,6 +488,8 @@ input,select,textarea{-webkit-appearance:none}
     <button class="nav-btn"        id="nl-faltante" onclick="nav('faltante')"><span class="nav-ico">❓</span>Faltante       <span class="nbadge hide" style="background:#6B7280" id="nb-faltante">0</span></button>
     <div class="nav-sect">Análise</div>
     <button class="nav-btn"        id="nl-analytics" onclick="nav('analytics')"><span class="nav-ico">📊</span>Gráficos</button>
+    <div class="nav-section-label" style="padding:10px 12px 4px;font-size:0.58rem;font-weight:700;text-transform:uppercase;color:#9CA3AF;letter-spacing:.5px">NEX</div>
+    <button class="nav-btn" id="nb-nex" onclick="nav('nex')"><span class="nav-icon">🏢</span><span>NEX Agência</span></button>
 
     <div class="sb-footer">
       <div class="prog-row"><span>Resolução</span><span class="prog-pct" id="progPct">0%</span></div>
@@ -653,6 +667,73 @@ input,select,textarea{-webkit-appearance:none}
       </div>
       <div class="ch-card"><div class="ch-title">🚗 Top Motoristas por Volume</div><div class="ch-wrap" style="height:220px"><canvas id="chDrivers"></canvas></div></div>
     </div>
+
+    <!-- VIEW: NEX -->
+    <div id="view-nex" style="display:none">
+      <div class="content-wrap">
+
+        <!-- Header -->
+        <div class="section-header">
+          <div>
+            <div class="section-title">&#127970; NEX — Estoque na Agência</div>
+            <div style="font-size:0.72rem;color:#6B7280;margin-top:2px">Registre os pacotes que estão na agência por dia</div>
+          </div>
+        </div>
+
+        <!-- Session form -->
+        <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px;margin-bottom:16px">
+          <div style="font-size:0.78rem;font-weight:800;color:#374151;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Nova Sessão / Sessão Ativa</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
+              <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Agência</label>
+              <input id="nexAgency" type="text" placeholder="Ex: AVISO" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-family:inherit;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:130px">
+              <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Data</label>
+              <input id="nexDate" type="text" placeholder="DD/MM/AAAA" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-family:inherit" readonly>
+            </div>
+          </div>
+          <!-- Scan bar -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="nexScanInput" type="text" placeholder="&#128230; Bipe ou digite o ID do pacote..." style="flex:1;min-width:180px;padding:9px 12px;border:2px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-weight:700;font-family:inherit" onkeydown="if(event.key==='Enter')addNexPackage()">
+            <button onclick="addNexPackage()" style="background:#1C1C1E;color:#FFE600;border:none;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:900;cursor:pointer;font-family:inherit">&#9889; Adicionar</button>
+          </div>
+          <!-- Active session info -->
+          <div id="nex-session-info" style="margin-top:10px;font-size:0.75rem;color:#6B7280"></div>
+        </div>
+
+        <!-- Current session packages -->
+        <div id="nex-current-section" style="display:none;background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div style="font-size:0.78rem;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px">
+              Pacotes na Sessão Atual — <span id="nex-current-count" style="color:#3483FA">0</span>
+            </div>
+            <button onclick="clearNexSession()" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:5px 12px;font-size:0.72rem;font-weight:700;cursor:pointer">&#128465; Limpar Sessão</button>
+          </div>
+          <div id="nex-pkg-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        </div>
+
+        <!-- History -->
+        <div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px">
+          <div style="font-size:0.78rem;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Histórico de Sessões NEX</div>
+          <div class="tbl-wrap" style="overflow-x:auto">
+            <table class="data-tbl" id="nex-history-tbl">
+              <thead>
+                <tr>
+                  <th>DATA</th>
+                  <th>AGÊNCIA</th>
+                  <th>QTD PACOTES</th>
+                  <th>IDs</th>
+                  <th>AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody id="nex-history-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- end view-nex -->
 
   </main>
 </div>
@@ -872,6 +953,9 @@ localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
 var pkgs = [];
 try { pkgs = JSON.parse(localStorage.getItem('pkg_data') || '[]'); } catch(e) { pkgs = []; }
 
+var nexSessions = [];
+try { nexSessions = JSON.parse(localStorage.getItem('nex_data') || '[]'); } catch(e) { nexSessions = []; }
+
 var activeView = 'grid';
 var pendingAction = null;
 var pendingDupId = null;
@@ -957,6 +1041,10 @@ function persist() {
     .catch(function() { setSyncUI('err'); });
 }
 
+function persistNex() {
+  localStorage.setItem('nex_data', JSON.stringify(nexSessions));
+}
+
 function setSyncUI(state) {
   var dot = document.getElementById('syncDot');
   var txt = document.getElementById('syncTxt');
@@ -1016,13 +1104,16 @@ window.addEventListener('DOMContentLoaded', function() {
    NAVIGATION
 =================================================================== */
 function nav(view) {
-  var views = ['grid', 'pending', 'alert', 'received', 'voando', 'faltante', 'analytics'];
+  var views = ['grid', 'pending', 'alert', 'received', 'voando', 'faltante', 'analytics', 'nex'];
   views.forEach(function(v) {
     var el  = document.getElementById('view-' + v);
     var btn = document.getElementById('nl-' + v);
     if (el)  el.style.display = v === view ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', v === view);
   });
+  // NEX button uses id nb-nex (not nl-nex)
+  var nexBtn = document.getElementById('nb-nex');
+  if (nexBtn) nexBtn.classList.toggle('active', view === 'nex');
   activeView = view;
 
   if (view === 'grid')      renderGrid();
@@ -1032,6 +1123,7 @@ function nav(view) {
   if (view === 'voando')    renderVoando();
   if (view === 'faltante')  renderFaltante();
   if (view === 'analytics') { initCharts(); renderAnalytics(); }
+  if (view === 'nex')       { initNex(); }
 }
 
 /* ===================================================================
@@ -2297,6 +2389,225 @@ function switchCamera() {
   if (camRunning) {
     closeCamera();
     setTimeout(function() { openCamera(); }, 400);
+  }
+}
+
+// ── NEX ──────────────────────────────────────────────────────────
+var nexActiveSession = null;
+
+function initNex() {
+  // Set today's date
+  var now = new Date();
+  var dd = String(now.getDate()).padStart(2, '0');
+  var mm = String(now.getMonth() + 1).padStart(2, '0');
+  var yyyy = now.getFullYear();
+  var today = dd + '/' + mm + '/' + yyyy;
+  var dateEl = document.getElementById('nexDate');
+  if (dateEl) dateEl.value = today;
+
+  // Restore agency from localStorage
+  var savedAgency = localStorage.getItem('nex_last_agency') || '';
+  var agencyEl = document.getElementById('nexAgency');
+  if (agencyEl && savedAgency) agencyEl.value = savedAgency;
+
+  // Find active session for today
+  nexActiveSession = null;
+  for (var i = 0; i < nexSessions.length; i++) {
+    if (nexSessions[i].date === today) {
+      nexActiveSession = nexSessions[i];
+      break;
+    }
+  }
+
+  renderNexCurrent();
+  renderNexHistory();
+}
+
+function addNexPackage() {
+  var scanEl = document.getElementById('nexScanInput');
+  var agencyEl = document.getElementById('nexAgency');
+  var dateEl = document.getElementById('nexDate');
+  if (!scanEl || !agencyEl || !dateEl) return;
+
+  var pkgId = scanEl.value.trim();
+  var agency = agencyEl.value.trim().toUpperCase();
+  var date = dateEl.value.trim();
+
+  if (!pkgId) { scanEl.focus(); return; }
+  if (!agency) {
+    agencyEl.style.borderColor = '#e53935';
+    agencyEl.focus();
+    setTimeout(function() { agencyEl.style.borderColor = '#E5E7EB'; }, 1500);
+    return;
+  }
+
+  // Save agency
+  localStorage.setItem('nex_last_agency', agency);
+
+  // Find or create session for this date+agency
+  nexActiveSession = null;
+  for (var i = 0; i < nexSessions.length; i++) {
+    if (nexSessions[i].date === date && nexSessions[i].agency === agency) {
+      nexActiveSession = nexSessions[i];
+      break;
+    }
+  }
+
+  if (!nexActiveSession) {
+    nexActiveSession = {
+      id: 'NEX-' + Date.now(),
+      date: date,
+      agency: agency,
+      packages: [],
+      createdAt: new Date().toISOString()
+    };
+    nexSessions.unshift(nexActiveSession);
+  }
+
+  // Check duplicate
+  if (nexActiveSession.packages.indexOf(pkgId) >= 0) {
+    var info = document.getElementById('nex-session-info');
+    if (info) { info.textContent = 'ID ' + pkgId + ' ja foi adicionado nesta sessao.'; info.style.color = '#d97706'; }
+    scanEl.value = '';
+    scanEl.focus();
+    return;
+  }
+
+  nexActiveSession.packages.push(pkgId);
+  persistNex();
+
+  // Flash feedback
+  var info = document.getElementById('nex-session-info');
+  if (info) { info.textContent = pkgId + ' adicionado! Total: ' + nexActiveSession.packages.length; info.style.color = '#00a650'; }
+
+  scanEl.value = '';
+  scanEl.focus();
+
+  renderNexCurrent();
+  renderNexHistory();
+}
+
+function renderNexCurrent() {
+  var section = document.getElementById('nex-current-section');
+  var countEl = document.getElementById('nex-current-count');
+  var listEl = document.getElementById('nex-pkg-list');
+  if (!section || !countEl || !listEl) return;
+
+  if (!nexActiveSession || nexActiveSession.packages.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  countEl.textContent = nexActiveSession.packages.length;
+  listEl.innerHTML = '';
+
+  for (var i = 0; i < nexActiveSession.packages.length; i++) {
+    var pkgId = nexActiveSession.packages[i];
+    var tag = document.createElement('div');
+    tag.style.cssText = 'background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;padding:4px 10px;font-size:0.75rem;font-weight:700;color:#374151;display:flex;align-items:center;gap:6px';
+    var num = document.createElement('span');
+    num.style.cssText = 'background:#3483FA;color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;flex-shrink:0';
+    num.textContent = i + 1;
+    var txt = document.createTextNode(pkgId);
+    var del = document.createElement('span');
+    del.style.cssText = 'color:#e53935;cursor:pointer;font-size:0.8rem;margin-left:2px';
+    del.textContent = 'x';
+    (function(idx) {
+      del.onclick = function() { removeNexPackage(idx); };
+    })(i);
+    tag.appendChild(num);
+    tag.appendChild(txt);
+    tag.appendChild(del);
+    listEl.appendChild(tag);
+  }
+}
+
+function removeNexPackage(idx) {
+  if (!nexActiveSession) return;
+  nexActiveSession.packages.splice(idx, 1);
+  if (nexActiveSession.packages.length === 0) {
+    nexSessions = nexSessions.filter(function(s) { return s.id !== nexActiveSession.id; });
+    nexActiveSession = null;
+  }
+  persistNex();
+  renderNexCurrent();
+  renderNexHistory();
+}
+
+function clearNexSession() {
+  if (!nexActiveSession) return;
+  nexSessions = nexSessions.filter(function(s) { return s.id !== nexActiveSession.id; });
+  nexActiveSession = null;
+  persistNex();
+  renderNexCurrent();
+  renderNexHistory();
+  var info = document.getElementById('nex-session-info');
+  if (info) { info.textContent = 'Sessao limpa.'; info.style.color = '#6B7280'; }
+}
+
+function renderNexHistory() {
+  var tbody = document.getElementById('nex-history-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (nexSessions.length === 0) {
+    var tr = document.createElement('tr');
+    var td = document.createElement('td');
+    td.colSpan = 5;
+    td.style.cssText = 'text-align:center;color:#9CA3AF;padding:24px;font-size:0.8rem';
+    td.textContent = 'Nenhuma sessao NEX registrada ainda.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (var i = 0; i < nexSessions.length; i++) {
+    var s = nexSessions[i];
+    var tr = document.createElement('tr');
+
+    var tdDate = document.createElement('td');
+    tdDate.style.fontWeight = '700';
+    tdDate.textContent = s.date;
+
+    var tdAgency = document.createElement('td');
+    var badge = document.createElement('span');
+    badge.style.cssText = 'background:#FFF3CD;color:#92400e;border:1px solid #F59E0B;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800';
+    badge.textContent = s.agency;
+    tdAgency.appendChild(badge);
+
+    var tdCount = document.createElement('td');
+    var countBadge = document.createElement('span');
+    countBadge.style.cssText = 'background:#DBEAFE;color:#1D4ED8;border-radius:5px;padding:2px 8px;font-size:0.78rem;font-weight:800';
+    countBadge.textContent = s.packages.length + ' pacotes';
+    tdCount.appendChild(countBadge);
+
+    var tdIds = document.createElement('td');
+    tdIds.style.cssText = 'font-size:0.7rem;color:#6B7280;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+    tdIds.title = s.packages.join(', ');
+    tdIds.textContent = s.packages.slice(0, 3).join(', ') + (s.packages.length > 3 ? ' +' + (s.packages.length - 3) + ' mais' : '');
+
+    var tdAct = document.createElement('td');
+    var delBtn = document.createElement('button');
+    delBtn.style.cssText = 'background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;font-weight:700;cursor:pointer';
+    delBtn.textContent = 'Del';
+    (function(sid) {
+      delBtn.onclick = function() {
+        nexSessions = nexSessions.filter(function(x) { return x.id !== sid; });
+        if (nexActiveSession && nexActiveSession.id === sid) nexActiveSession = null;
+        persistNex();
+        renderNexCurrent();
+        renderNexHistory();
+      };
+    })(s.id);
+    tdAct.appendChild(delBtn);
+
+    tr.appendChild(tdDate);
+    tr.appendChild(tdAgency);
+    tr.appendChild(tdCount);
+    tr.appendChild(tdIds);
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
   }
 }
 </script>
