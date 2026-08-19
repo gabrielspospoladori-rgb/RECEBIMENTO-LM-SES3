@@ -770,7 +770,12 @@ input,select,textarea{-webkit-appearance:none}
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
             <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px">
               <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Agência</label>
-              <input id="nexAgency" type="text" placeholder="Ex: AVISO" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-family:inherit;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+              <select id="nexAgency" style="padding:8px 10px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-family:inherit;background:#fff;width:100%">
+                <option value="">Selecione a agência</option>
+                <option value="AVISO">AVISO</option>
+                <option value="SOORETAMA">SOORETAMA</option>
+                <option value="GAIVOTAS">GAIVOTAS</option>
+              </select>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:130px">
               <label style="font-size:0.68rem;font-weight:700;color:#6B7280;text-transform:uppercase">Data</label>
@@ -2573,8 +2578,8 @@ function initNex() {
   if (dateEl) dateEl.value = today;
 
   // Restore agency from localStorage
-  var savedAgency = localStorage.getItem('nex_last_agency') || '';
   var agencyEl = document.getElementById('nexAgency');
+  var savedAgency = localStorage.getItem('nex_last_agency') || '';
   if (agencyEl && savedAgency) agencyEl.value = savedAgency;
 
   // Find active session for today
@@ -2597,7 +2602,7 @@ function addNexPackage() {
   if (!scanEl || !agencyEl || !dateEl) return;
 
   var pkgId = scanEl.value.trim();
-  var agency = agencyEl.value.trim().toUpperCase();
+  var agency = agencyEl.value.trim();
   var date = dateEl.value.trim();
 
   if (!pkgId) { scanEl.focus(); return; }
