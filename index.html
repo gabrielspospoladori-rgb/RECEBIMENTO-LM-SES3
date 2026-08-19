@@ -1182,6 +1182,9 @@ try { pkgs = JSON.parse(localStorage.getItem('pkg_data') || '[]'); } catch(e) { 
 var nexSessions = [];
 try { nexSessions = JSON.parse(localStorage.getItem('nex_data') || '[]'); } catch(e) { nexSessions = []; }
 
+var deletedRecords = {};
+try { deletedRecords = JSON.parse(localStorage.getItem('pkg_deleted_v1') || '{}'); } catch(e) { deletedRecords = {}; }
+
 var activeView = 'grid';
 var pendingAction = null;
 var pendingDupId = null;
@@ -1209,7 +1212,7 @@ function ghUrl() {
 function ghRawUrl() {
   var repo = (cfg.repo || '').replace(/^\/+|\/+$/g, '');
   var file = (cfg.file || 'data.json').replace(/^\/+/, '');
-  return 'https://raw.githubusercontent.com/' + repo + '/main/' + file + '?t=' + Date.now();
+  return 'https://api.github.com/repos/' + repo + '/contents/' + file + '?ref=main&t=' + Date.now();
 }
 
 function validateRemoteData(data) {
@@ -1258,7 +1261,11 @@ function mergeRecordArrays(remoteItems, localItems) {
   for (i = 0; i < result.length; i++) positions[recordMergeKey(result[i], i)] = i;
   for (i = 0; i < (localItems || []).length; i++) {
     var key = recordMergeKey(localItems[i], i);
-    if (typeof positions[key] === 'number') result[positions[key]] = localItems[i];
+    if (typeof positions[key] === 'number') {
+      var remoteTime = recordModifiedTimestamp(result[positions[key]]);
+      var localTime = recordModifiedTimestamp(localItems[i]);
+      if (localTime >= remoteTime) result[positions[key]] = localItems[i];
+    }
     else { positions[key] = result.length; result.push(localItems[i]); }
   }
   return result;
@@ -1285,6 +1292,68 @@ function retentionTimestamp(item, type) {
   return latest ? latest.getTime() : null;
 }
 
+function recordModifiedTimestamp(item) {
+  if (!item) return 0;
+  var values = [item.updatedAt, item.ts, item.createdAt, item.receivedAt, item.pendingDate, item.date];
+  var latest = 0;
+  for (var i = 0; i < values.length; i++) {
+    var date = parseRetentionDate(values[i]);
+    if (date && date.getTime() > latest) latest = date.getTime();
+  }
+  return latest;
+}
+
+function normalizeDeletedRecords(value) {
+  var source = value && typeof value === 'object' ? value : {};
+  return {
+    pkgs: source.pkgs || {},
+    nexSessions: source.nexSessions || {},
+    faltanteReg: source.faltanteReg || {},
+    voandoReg: source.voandoReg || {}
+  };
+}
+
+function mergeDeletedRecords(remoteDeleted, localDeleted) {
+  var remote = normalizeDeletedRecords(remoteDeleted);
+  var local = normalizeDeletedRecords(localDeleted);
+  var merged = normalizeDeletedRecords({});
+  var collections = ['pkgs', 'nexSessions', 'faltanteReg', 'voandoReg'];
+  for (var i = 0; i < collections.length; i++) {
+    var name = collections[i];
+    var ids = {};
+    var id;
+    for (id in remote[name]) if (Object.prototype.hasOwnProperty.call(remote[name], id)) ids[id] = true;
+    for (id in local[name]) if (Object.prototype.hasOwnProperty.call(local[name], id)) ids[id] = true;
+    for (id in ids) if (Object.prototype.hasOwnProperty.call(ids, id)) {
+      var remoteTime = parseRetentionDate(remote[name][id]);
+      var localTime = parseRetentionDate(local[name][id]);
+      merged[name][id] = !remoteTime || (localTime && localTime.getTime() >= remoteTime.getTime()) ? local[name][id] : remote[name][id];
+    }
+  }
+  return merged;
+}
+
+function markRecordDeleted(collection, id) {
+  deletedRecords = normalizeDeletedRecords(deletedRecords);
+  deletedRecords[collection][String(id)] = new Date().toISOString();
+  localStorage.setItem('pkg_deleted_v1', JSON.stringify(deletedRecords));
+}
+
+function applyDeletedRecords() {
+  deletedRecords = normalizeDeletedRecords(deletedRecords);
+  function filterDeleted(items, collection) {
+    return (items || []).filter(function(item) {
+      if (!item || typeof item.id === 'undefined') return true;
+      var deletedAt = parseRetentionDate(deletedRecords[collection][String(item.id)]);
+      return !deletedAt || recordModifiedTimestamp(item) > deletedAt.getTime();
+    });
+  }
+  pkgs = filterDeleted(pkgs, 'pkgs');
+  nexSessions = filterDeleted(nexSessions, 'nexSessions');
+  faltanteReg = filterDeleted(faltanteReg, 'faltanteReg');
+  voandoReg = filterDeleted(voandoReg, 'voandoReg');
+}
+
 function applyDataRetention() {
   var cutoff = Date.now() - (DATA_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   var removed = 0;
@@ -1308,20 +1377,20 @@ function storeAllLocalData() {
   localStorage.setItem('nex_data', JSON.stringify(nexSessions));
   localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg));
   localStorage.setItem('voando_reg', JSON.stringify(voandoReg));
+  localStorage.setItem('pkg_deleted_v1', JSON.stringify(normalizeDeletedRecords(deletedRecords)));
 }
 
-function doSync() {
+function doSyncNow() {
   var key = sessionStorage.getItem(SESSION_KEY2) || '';
   var hasToken = !!cfg.token;
   var url = hasToken ? ghUrl() : ghRawUrl();
-  var options = hasToken ? { headers: ghHeaders(), cache: 'no-store' } : { cache: 'no-store' };
+  var options = hasToken ? { headers: ghHeaders(), cache: 'no-store' } : { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } };
   setSyncUI('spin');
   return fetch(url, options)
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
       var file = f;
-      if (hasToken) {
-        if (!f.content) throw new Error('Arquivo remoto sem conteudo');
+      if (typeof f.content === 'string') {
         file = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
       }
       var data;
@@ -1339,6 +1408,7 @@ function doSync() {
       var localNex = nexSessions || [];
       var localFaltante = faltanteReg || [];
       var localVoando = voandoReg || [];
+      var localDeleted = deletedRecords || {};
       var recoverLegacyLocal = !localStorage.getItem(SYNC_MIGRATION_KEY) && !!hasAnyLocalData();
       var keepLocalChanges = isRemoteDirty() || recoverLegacyLocal;
       if (Array.isArray(data)) {
@@ -1349,6 +1419,10 @@ function doSync() {
         faltanteReg  = keepLocalChanges ? mergeRecordArrays(data.faltanteReg || [], localFaltante) : (data.faltanteReg || []);
         voandoReg    = keepLocalChanges ? mergeRecordArrays(data.voandoReg || [], localVoando) : (data.voandoReg || []);
       }
+      deletedRecords = keepLocalChanges
+        ? mergeDeletedRecords(data.deletedRecords || {}, localDeleted)
+        : normalizeDeletedRecords(data.deletedRecords || {});
+      applyDeletedRecords();
       var retentionRemoved = applyDataRetention();
       storeAllLocalData();
       localStorage.setItem(SYNC_MIGRATION_KEY, '1');
@@ -1377,6 +1451,48 @@ function doSync() {
     });
 }
 
+var syncInFlight = null;
+
+function doSync() {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = doSyncNow();
+  return syncInFlight.then(function(result) {
+    syncInFlight = null;
+    return result;
+  }, function(error) {
+    syncInFlight = null;
+    throw error;
+  });
+}
+
+var AUTO_SYNC_WRITER_MS = 15000;
+var AUTO_SYNC_READER_MS = 120000;
+var autoSyncTimer = null;
+var autoSyncEventsReady = false;
+var lastAutoSyncAt = 0;
+
+function requestAutoSync(force) {
+  if (sessionStorage.getItem(SESSION_KEY) !== '1') return;
+  if (document.visibilityState && document.visibilityState !== 'visible') return;
+  var minimumInterval = cfg.token ? AUTO_SYNC_WRITER_MS : AUTO_SYNC_READER_MS;
+  if (force !== true && Date.now() - lastAutoSyncAt < minimumInterval) return;
+  lastAutoSyncAt = Date.now();
+  doSync();
+}
+
+function startAutoSync() {
+  lastAutoSyncAt = Date.now();
+  if (!autoSyncTimer) autoSyncTimer = setInterval(function() { requestAutoSync(false); }, AUTO_SYNC_WRITER_MS);
+  if (!autoSyncEventsReady) {
+    autoSyncEventsReady = true;
+    window.addEventListener('focus', function() { requestAutoSync(true); });
+    window.addEventListener('online', function() { requestAutoSync(true); });
+    document.addEventListener('visibilitychange', function() {
+      if (!document.visibilityState || document.visibilityState === 'visible') requestAutoSync(true);
+    });
+  }
+}
+
 function showSaveError(msg) {
   var t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e53935;color:#fff;padding:12px 20px;border-radius:10px;font-size:0.85rem;font-weight:700;z-index:9999;max-width:320px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
@@ -1394,15 +1510,26 @@ function saveGHAttempt(retryCount) {
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
       var sha = f.sha;
+      var remoteFile = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
+      var remoteData = remoteFile.enc ? JSON.parse(decryptData(remoteFile.enc, key)) : remoteFile;
+      if (Array.isArray(remoteData)) remoteData = { pkgs: remoteData };
+      validateRemoteData(remoteData);
+      pkgs = mergeRecordArrays(remoteData.pkgs || [], pkgs || []);
+      nexSessions = mergeRecordArrays(remoteData.nexSessions || [], nexSessions || []);
+      faltanteReg = mergeRecordArrays(remoteData.faltanteReg || [], faltanteReg || []);
+      voandoReg = mergeRecordArrays(remoteData.voandoReg || [], voandoReg || []);
+      deletedRecords = mergeDeletedRecords(remoteData.deletedRecords || {}, deletedRecords || {});
+      applyDeletedRecords();
       var retentionRemoved = applyDataRetention();
-      if (retentionRemoved > 0) { markRemoteDirty(); storeAllLocalData(); }
+      if (retentionRemoved > 0) markRemoteDirty();
+      storeAllLocalData();
       var voandoStrip = (voandoReg || []).map(function(v) {
         /* strip photos se o payload ficar gigante */
         var copy = JSON.parse(JSON.stringify(v));
         if (copy.photo && copy.photo.length > 60000) { copy.photo = ''; }
         return copy;
       });
-      var allData = { pkgs: pkgs, nexSessions: nexSessions, faltanteReg: faltanteReg, voandoReg: voandoStrip };
+      var allData = { pkgs: pkgs, nexSessions: nexSessions, faltanteReg: faltanteReg, voandoReg: voandoStrip, deletedRecords: normalizeDeletedRecords(deletedRecords) };
       var jsonStr = JSON.stringify(allData);
       var fileObj = key ? { enc: encryptData(jsonStr, key) } : allData;
       var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(fileObj))));
@@ -1513,6 +1640,7 @@ function appInit() {
 
   // Sync with GitHub. Sem token, usa o arquivo publico em modo somente leitura.
   doSync();
+  startAutoSync();
 }
 
 window.addEventListener('DOMContentLoaded', function() {
@@ -1701,7 +1829,8 @@ function execScan(id, tag) {
     receivedAt:  now,
     receiptCode: code,
     specialTag:  tag || '',
-    ts:          new Date().toISOString()
+    ts:          new Date().toISOString(),
+    updatedAt:   new Date().toISOString()
   };
 
   // Replace existing or prepend
@@ -2147,7 +2276,7 @@ function tdActions(p, isPend) {
 =================================================================== */
 function updateReason(id, reason) {
   for (var i = 0; i < pkgs.length; i++) {
-    if (String(pkgs[i].id) === String(id)) { pkgs[i].reason = reason; break; }
+    if (String(pkgs[i].id) === String(id)) { pkgs[i].reason = reason; pkgs[i].updatedAt = new Date().toISOString(); break; }
   }
   persist();
 }
@@ -2158,6 +2287,7 @@ function confirmReceive(id) {
       pkgs[i].status     = 'Recebido';
       pkgs[i].receivedAt = fmtNow();
       if (!pkgs[i].receiptCode) pkgs[i].receiptCode = genCode();
+      pkgs[i].updatedAt = new Date().toISOString();
       break;
     }
   }
@@ -2176,6 +2306,7 @@ function setStatus(id, newStatus) {
       if (!pkgs[i].pendingDate || pkgs[i].pendingDate === '—') {
         pkgs[i].pendingDate = fmtNow();
       }
+      pkgs[i].updatedAt = new Date().toISOString();
       break;
     }
   }
@@ -2190,6 +2321,7 @@ function resetReceive(id) {
       pkgs[i].status      = 'Pendente';
       pkgs[i].receivedAt  = '—';
       pkgs[i].receiptCode = '';
+      pkgs[i].updatedAt = new Date().toISOString();
       break;
     }
   }
@@ -2213,7 +2345,7 @@ function reqClear() {
 }
 
 function verifyPwd() {
-  if (document.getElementById('pwdIn').value !== 'LB26') {
+  if (document.getElementById('pwdIn').value !== (sessionStorage.getItem(SESSION_KEY2) || '')) {
     showToast('❌ Senha incorreta!', 'd');
     document.getElementById('pwdIn').value = '';
     return;
@@ -2223,10 +2355,12 @@ function verifyPwd() {
 
   if (pendingAction.type === 'delete') {
     var id = pendingAction.id;
+    markRecordDeleted('pkgs', id);
     pkgs = pkgs.filter(function(p) { return String(p.id) !== String(id); });
     showToast('🗑 Pacote excluído.', 'i');
   }
   if (pendingAction.type === 'clear') {
+    for (var i = 0; i < pkgs.length; i++) markRecordDeleted('pkgs', pkgs[i].id);
     pkgs = [];
     showToast('🗑 Lista limpa.', 'i');
   }
@@ -2356,7 +2490,8 @@ function saveAddPending() {
     receivedAt:  '—',
     receiptCode: '',
     specialTag:  '',
-    ts:          new Date().toISOString()
+    ts:          new Date().toISOString(),
+    updatedAt:   new Date().toISOString()
   };
 
   if (idx !== -1) {
@@ -2984,7 +3119,8 @@ function addNexPackage() {
       date: date,
       agency: agency,
       packages: [],
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     nexSessions.unshift(nexActiveSession);
   }
@@ -2999,6 +3135,7 @@ function addNexPackage() {
   }
 
   nexActiveSession.packages.push(pkgId);
+  nexActiveSession.updatedAt = new Date().toISOString();
   persistNex();
 
   // Flash feedback
@@ -3050,8 +3187,11 @@ function renderNexCurrent() {
 
 function removeNexPackage(idx) {
   if (!nexActiveSession) return;
+  var sessionId = nexActiveSession.id;
   nexActiveSession.packages.splice(idx, 1);
+  nexActiveSession.updatedAt = new Date().toISOString();
   if (nexActiveSession.packages.length === 0) {
+    markRecordDeleted('nexSessions', sessionId);
     nexSessions = nexSessions.filter(function(s) { return s.id !== nexActiveSession.id; });
     nexActiveSession = null;
   }
@@ -3062,6 +3202,7 @@ function removeNexPackage(idx) {
 
 function clearNexSession() {
   if (!nexActiveSession) return;
+  markRecordDeleted('nexSessions', nexActiveSession.id);
   nexSessions = nexSessions.filter(function(s) { return s.id !== nexActiveSession.id; });
   nexActiveSession = null;
   persistNex();
@@ -3118,6 +3259,7 @@ function renderNexHistory() {
     delBtn.textContent = 'Del';
     (function(sid) {
       delBtn.onclick = function() {
+        markRecordDeleted('nexSessions', sid);
         nexSessions = nexSessions.filter(function(x) { return x.id !== sid; });
         if (nexActiveSession && nexActiveSession.id === sid) nexActiveSession = null;
         persistNex();
@@ -3189,7 +3331,7 @@ function addFaltanteReg() {
   if (!pkgId || !pkgId.trim()) { if (status) { status.textContent = 'Informe o ID do pacote.'; status.style.color='#e53935'; } return; }
   if (!facType) { if (status) { status.textContent = 'Selecione o tipo de facility.'; status.style.color='#e53935'; } return; }
   if (!facSub)  { if (status) { status.textContent = 'Selecione a facility.'; status.style.color='#e53935'; } return; }
-  var entry = { id: 'FLT-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), createdAt: new Date().toISOString() };
+  var entry = { id: 'FLT-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   faltanteReg.unshift(entry);
   persistFaltanteReg();
   document.getElementById('fltPkgId').value = '';
@@ -3221,7 +3363,7 @@ function renderFaltanteRegTable() {
     var btn = document.createElement('button');
     btn.style.cssText='background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;cursor:pointer';
     btn.textContent='🗑';
-    (function(eid) { btn.onclick = function() { faltanteReg = faltanteReg.filter(function(x){return x.id!==eid;}); persistFaltanteReg(); renderFaltanteRegTable(); checkAchados(); updateAchadosBadge(); }; })(e.id);
+    (function(eid) { btn.onclick = function() { markRecordDeleted('faltanteReg', eid); faltanteReg = faltanteReg.filter(function(x){return x.id!==eid;}); persistFaltanteReg(); renderFaltanteRegTable(); checkAchados(); updateAchadosBadge(); }; })(e.id);
     tdAct.appendChild(btn); tr.appendChild(tdAct);
     tbody.appendChild(tr);
   }
@@ -3293,7 +3435,7 @@ function addVoandoReg() {
   if (!pkgId || !pkgId.trim()) { if (status) { status.textContent = 'Informe o ID do pacote.'; status.style.color='#e53935'; } return; }
   if (!facType) { if (status) { status.textContent = 'Selecione o tipo de facility.'; status.style.color='#e53935'; } return; }
   if (!facSub)  { if (status) { status.textContent = 'Selecione a facility.'; status.style.color='#e53935'; } return; }
-  var entry = { id: 'VOA-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), photo: voaPhotoData || null, createdAt: new Date().toISOString() };
+  var entry = { id: 'VOA-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), photo: voaPhotoData || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   voandoReg.unshift(entry);
   persistVoandoReg();
   document.getElementById('voaPkgId').value = '';
@@ -3329,7 +3471,7 @@ function renderVoandoRegTable() {
     else { var sp2=document.createElement('span'); sp2.style.cssText='background:#EDE9FE;color:#5B21B6;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp2.textContent='✈ Voando'; tdStatus.appendChild(sp2); }
     tr.appendChild(tdStatus);
     var tdAct=document.createElement('td'); var btn=document.createElement('button'); btn.style.cssText='background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;cursor:pointer'; btn.textContent='🗑';
-    (function(eid){btn.onclick=function(){voandoReg=voandoReg.filter(function(x){return x.id!==eid;});persistVoandoReg();renderVoandoRegTable();checkAchados();updateAchadosBadge();};})(e.id);
+    (function(eid){btn.onclick=function(){markRecordDeleted('voandoReg', eid);voandoReg=voandoReg.filter(function(x){return x.id!==eid;});persistVoandoReg();renderVoandoRegTable();checkAchados();updateAchadosBadge();};})(e.id);
     tdAct.appendChild(btn); tr.appendChild(tdAct);
     tbody.appendChild(tr);
   }
