@@ -1203,6 +1203,45 @@ function validateRemoteData(data) {
   return true;
 }
 
+var REMOTE_DIRTY_KEY = 'pkg_remote_dirty_v2';
+var SYNC_MIGRATION_KEY = 'pkg_sync_recovery_v2';
+
+function isRemoteDirty() {
+  return localStorage.getItem(REMOTE_DIRTY_KEY) === '1';
+}
+
+function markRemoteDirty() {
+  localStorage.setItem(REMOTE_DIRTY_KEY, '1');
+}
+
+function clearRemoteDirty() {
+  localStorage.removeItem(REMOTE_DIRTY_KEY);
+}
+
+function hasAnyLocalData() {
+  return (pkgs && pkgs.length) || (nexSessions && nexSessions.length) ||
+    (faltanteReg && faltanteReg.length) || (voandoReg && voandoReg.length);
+}
+
+function recordMergeKey(item, index) {
+  if (item && typeof item.id !== 'undefined') return 'id:' + String(item.id);
+  if (item && item.packageId && item.createdAt) return 'pkg:' + item.packageId + ':' + item.createdAt;
+  return 'json:' + JSON.stringify(item) + ':' + index;
+}
+
+function mergeRecordArrays(remoteItems, localItems) {
+  var result = (remoteItems || []).slice();
+  var positions = {};
+  var i;
+  for (i = 0; i < result.length; i++) positions[recordMergeKey(result[i], i)] = i;
+  for (i = 0; i < (localItems || []).length; i++) {
+    var key = recordMergeKey(localItems[i], i);
+    if (typeof positions[key] === 'number') result[positions[key]] = localItems[i];
+    else { positions[key] = result.length; result.push(localItems[i]); }
+  }
+  return result;
+}
+
 function doSync() {
   var key = sessionStorage.getItem(SESSION_KEY2) || '';
   var hasToken = !!cfg.token;
@@ -1228,21 +1267,41 @@ function doSync() {
         data = file;
       }
       validateRemoteData(data);
+      var localPkgs = pkgs || [];
+      var localNex = nexSessions || [];
+      var localFaltante = faltanteReg || [];
+      var localVoando = voandoReg || [];
+      var recoverLegacyLocal = !localStorage.getItem(SYNC_MIGRATION_KEY) && !!hasAnyLocalData();
+      var keepLocalChanges = isRemoteDirty() || recoverLegacyLocal;
       if (Array.isArray(data)) {
-        pkgs = data;
+        pkgs = keepLocalChanges ? mergeRecordArrays(data, localPkgs) : data;
         localStorage.setItem('pkg_data', JSON.stringify(pkgs));
       } else {
-        pkgs         = data.pkgs         || [];
-        nexSessions  = data.nexSessions  || [];
-        faltanteReg  = data.faltanteReg  || [];
-        voandoReg    = data.voandoReg    || [];
+        pkgs         = keepLocalChanges ? mergeRecordArrays(data.pkgs || [], localPkgs) : (data.pkgs || []);
+        nexSessions  = keepLocalChanges ? mergeRecordArrays(data.nexSessions || [], localNex) : (data.nexSessions || []);
+        faltanteReg  = keepLocalChanges ? mergeRecordArrays(data.faltanteReg || [], localFaltante) : (data.faltanteReg || []);
+        voandoReg    = keepLocalChanges ? mergeRecordArrays(data.voandoReg || [], localVoando) : (data.voandoReg || []);
         localStorage.setItem('pkg_data',     JSON.stringify(pkgs));
         localStorage.setItem('nex_data',     JSON.stringify(nexSessions));
         localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg));
         localStorage.setItem('voando_reg',   JSON.stringify(voandoReg));
       }
-      setSyncUI(hasToken ? 'ok' : 'readonly');
+      localStorage.setItem(SYNC_MIGRATION_KEY, '1');
+      if (keepLocalChanges) markRemoteDirty();
       refreshAll();
+      if (hasToken && isRemoteDirty()) {
+        setSyncUI('spin');
+        return saveGH().then(function() {
+          clearRemoteDirty();
+          setSyncUI('ok');
+          return true;
+        }).catch(function(e) {
+          setSyncUI('err');
+          showSaveError('Os dados locais foram preservados, mas o envio falhou: ' + (e && e.message ? e.message : 'erro desconhecido'));
+          return false;
+        });
+      }
+      setSyncUI(isRemoteDirty() ? 'pending' : (hasToken ? 'ok' : 'readonly'));
       return true;
     })
     .catch(function(e) {
@@ -1299,18 +1358,35 @@ function saveGH() {
   return saveQueue;
 }
 
+function syncLocalChanges(errorPrefix) {
+  markRemoteDirty();
+  setSyncUI('spin');
+  return saveGH()
+    .then(function() {
+      clearRemoteDirty();
+      setSyncUI('ok');
+      return true;
+    })
+    .catch(function(e) {
+      if (!cfg.token) {
+        setSyncUI('pending');
+        showSaveError('Registro salvo neste aparelho, mas ainda nao enviado. Configure a gravacao nas configuracoes.');
+      } else {
+        setSyncUI('err');
+        showSaveError((errorPrefix || 'Erro ao salvar') + ': ' + (e && e.message ? e.message : 'verifique a conexao'));
+      }
+      return false;
+    });
+}
+
 function persist() {
   localStorage.setItem('pkg_data', JSON.stringify(pkgs));
-  setSyncUI('spin');
-  saveGH()
-    .then(function() { setSyncUI('ok'); })
-    .catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar: ' + (e && e.message ? e.message : 'verifique o token')); });
+  return syncLocalChanges('Erro ao salvar pacote');
 }
 
 function persistNex() {
   localStorage.setItem('nex_data', JSON.stringify(nexSessions));
-  setSyncUI('spin');
-  saveGH().then(function(){ setSyncUI('ok'); }).catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar NEX: ' + (e && e.message ? e.message : '')); });
+  return syncLocalChanges('Erro ao salvar NEX');
 }
 
 function setSyncUI(state) {
@@ -1322,6 +1398,7 @@ function setSyncUI(state) {
   if (state === 'err')    { dot.className = 'sync-dot err';  txt.textContent = 'Offline (local)'; }
   if (state === 'nocfg')  { dot.className = 'sync-dot err';  txt.textContent = '⚙ Não configurado'; }
   if (state === 'readonly'){ dot.className = 'sync-dot ok';   txt.textContent = '☁ Atualizado (somente leitura)'; }
+  if (state === 'pending') { dot.className = 'sync-dot err';  txt.textContent = '⚠ Salvo só neste aparelho'; }
 }
 
 /* ===================================================================
@@ -2906,7 +2983,7 @@ function buildFacSelects(prefix, containerId) {
    FALTANTE REGISTRATION
 =================================================================== */
 var faltanteReg = JSON.parse(localStorage.getItem('faltante_reg') || '[]');
-function persistFaltanteReg() { localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg)); setSyncUI('spin'); saveGH().then(function(){ setSyncUI('ok'); }).catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar Faltante: ' + (e && e.message ? e.message : '')); }); }
+function persistFaltanteReg() { localStorage.setItem('faltante_reg', JSON.stringify(faltanteReg)); return syncLocalChanges('Erro ao salvar Faltante'); }
 
 function initFaltanteReg() {
   var now = new Date();
@@ -2968,7 +3045,7 @@ function renderFaltanteRegTable() {
 =================================================================== */
 var voandoReg = JSON.parse(localStorage.getItem('voando_reg') || '[]');
 var voaPhotoData = null;
-function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(voandoReg)); setSyncUI('spin'); saveGH().then(function(){ setSyncUI('ok'); }).catch(function(e) { setSyncUI('err'); showSaveError('Erro ao salvar Voando: ' + (e && e.message ? e.message : '')); }); }
+function persistVoandoReg() { localStorage.setItem('voando_reg', JSON.stringify(voandoReg)); return syncLocalChanges('Erro ao salvar Voando'); }
 
 function previewVoaPhoto(input) {
   if (!input.files || !input.files[0]) return;
