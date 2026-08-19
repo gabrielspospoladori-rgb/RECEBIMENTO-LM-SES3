@@ -844,6 +844,10 @@ var REASONS = [
 =================================================================== */
 var cfg = {};
 try { cfg = JSON.parse(localStorage.getItem('pkg_gh_cfg') || '{}'); } catch(e) { cfg = {}; }
+if (!cfg.repo) cfg.repo = 'gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3';
+if (!cfg.file) cfg.file = 'data.json';
+// Save pre-filled defaults immediately so they persist
+localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
 
 var pkgs = [];
 try { pkgs = JSON.parse(localStorage.getItem('pkg_data') || '[]'); } catch(e) { pkgs = []; }
@@ -873,7 +877,7 @@ function ghUrl() {
 }
 
 function doSync() {
-  if (!cfg.token || !cfg.repo) {
+  if (!cfg.token) {
     setSyncUI('nocfg');
     return Promise.resolve();
   }
@@ -900,7 +904,7 @@ function doSync() {
 }
 
 function saveGH() {
-  if (!cfg.token || !cfg.repo) return Promise.resolve();
+  if (!cfg.token) return Promise.resolve();
   return fetch(ghUrl(), { headers: ghHeaders() })
     .then(function(r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -981,7 +985,7 @@ window.addEventListener('DOMContentLoaded', function() {
   refreshAll();
 
   // Sync with GitHub
-  if (cfg.token && cfg.repo) {
+  if (cfg.token) {
     doSync();
   } else {
     setSyncUI('nocfg');
@@ -1950,6 +1954,11 @@ function exportCSV() {
 function openModal(id) {
   var el = document.getElementById(id);
   if (el) el.classList.add('open');
+  if (id === 'cfgModal') {
+    document.getElementById('cfg-token').value = cfg.token || '';
+    document.getElementById('cfg-repo').value  = cfg.repo  || 'gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3';
+    document.getElementById('cfg-file').value  = cfg.file  || 'data.json';
+  }
 }
 function closeModal(id) {
   var el = document.getElementById(id);
