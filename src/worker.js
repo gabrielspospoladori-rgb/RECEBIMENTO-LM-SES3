@@ -122,7 +122,13 @@ async function readJson(request) {
 async function requireSession(request, env) {
   var header = request.headers.get("Authorization") || "";
   var token = header.indexOf("Bearer ") === 0 ? header.slice(7) : "";
-  return verifySessionToken(token, env.SESSION_SECRET);
+  var session = await verifySessionToken(token, env.SESSION_SECRET);
+  if (!session || session.username === "MELI") return session;
+  var row = await env.DB.prepare("SELECT display_name, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(session.username).first();
+  if (!row || row.active !== 1) return false;
+  session.displayName = row.display_name;
+  session.role = row.role;
+  return session;
 }
 
 async function readState(env) {
@@ -154,11 +160,7 @@ async function requireAdmin(request, env) {
   var session = await requireSession(request, env);
   if (!session) return false;
   if (session.username === "MELI") return session;
-  var row = await env.DB.prepare("SELECT display_name, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(session.username).first();
-  if (!row || row.active !== 1 || row.role !== "admin") return false;
-  session.displayName = row.display_name;
-  session.role = row.role;
-  return session;
+  return session.role === "admin" ? session : false;
 }
 
 function xorCipher(value, key) {
@@ -232,6 +234,12 @@ async function handleUserAdminUpdate(request, env, session, username) {
     await env.DB.prepare("UPDATE app_users SET role = ?1 WHERE username = ?2 COLLATE NOCASE").bind(role, username).run();
     await audit(env, session, (role === "admin" ? "promoveu_admin:" : "removeu_admin:") + username);
     return jsonResponse(request, { ok: true, role: role });
+  }
+  if (body.action === "delete_user") {
+    if (username === session.username) return jsonResponse(request, { error: "Voce nao pode excluir sua propria conta" }, 400);
+    await audit(env, session, "excluiu_conta:" + username + ":" + user.display_name);
+    await env.DB.prepare("DELETE FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(username).run();
+    return jsonResponse(request, { ok: true });
   }
   return jsonResponse(request, { error: "Acao invalida" }, 400);
 }

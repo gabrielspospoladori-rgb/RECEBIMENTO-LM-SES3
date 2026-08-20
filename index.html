@@ -2960,6 +2960,12 @@ function loadUsers() {
           role.textContent = user.role === 'admin' ? 'Remover admin' : '⭐ Tornar admin';
           role.onclick = function() { setUserRole(user.username, user.displayName, user.role === 'admin' ? 'user' : 'admin'); };
           actions.appendChild(role);
+          var remove = document.createElement('button');
+          remove.className = 'fbtn danger';
+          remove.style.marginLeft = '5px';
+          remove.textContent = '🗑 Excluir conta';
+          remove.onclick = function() { deleteUserAccount(user.username, user.displayName); };
+          actions.appendChild(remove);
         } else {
           actions.textContent = 'Conta principal';
         }
@@ -2992,6 +2998,13 @@ function setUserRole(username, displayName, role) {
   var label = role === 'admin' ? 'tornar ' + displayName + ' administrador' : 'remover o acesso administrativo de ' + displayName;
   if (!window.confirm('Confirma ' + label + '?')) return;
   updateUserAccount(username, { action: 'set_role', role: role }, role === 'admin' ? displayName + ' agora é administrador.' : displayName + ' agora é operador.');
+}
+
+function deleteUserAccount(username, displayName) {
+  var confirmation = window.prompt('Para excluir a conta de ' + displayName + ', digite o usuário ' + username + ':');
+  if (confirmation === null) return;
+  if (String(confirmation).trim().toUpperCase() !== username) { showToast('Confirmação incorreta. A conta não foi excluída.', 'w'); return; }
+  updateUserAccount(username, { action: 'delete_user' }, 'Conta de ' + displayName + ' excluída. Os registros enviados foram preservados.');
 }
 
 function compactPhotoFile(file, done) {
