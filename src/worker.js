@@ -282,7 +282,8 @@ async function passwordHash(password, saltHex) {
   var material = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
   var pairs = saltHex.match(/.{1,2}/g) || [];
   var salt = new Uint8Array(pairs.map(function(value) { return parseInt(value, 16); }));
-  var bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: salt, iterations: 120000 }, material, 256);
+  // workerd limits PBKDF2 to 100,000 iterations to protect Workers from DoS.
+  var bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: salt, iterations: 100000 }, material, 256);
   return bytesToHex(new Uint8Array(bits));
 }
 
