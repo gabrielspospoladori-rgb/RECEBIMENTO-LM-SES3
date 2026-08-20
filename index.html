@@ -440,6 +440,7 @@ input,select,textarea{-webkit-appearance:none}
   <div class="modal" style="max-width:360px">
     <div class="mhd">👤 Criar conta</div>
     <div class="mfield"><label>Nome completo *</label><input id="reg-name" autocomplete="name" placeholder="Nome que aparecerá como triador"></div>
+    <div class="mfield"><label>Função *</label><select id="reg-job-title"><option value="">Selecione a função</option><option value="LOG">LOG</option><option value="OPS3">OPS3</option><option value="TEAM LEADER">TEAM LEADER</option><option value="PS">PS</option></select></div>
     <div class="mfield"><label>Usuário *</label><input id="reg-user" autocomplete="username" placeholder="Ex.: JOAO.SILVA" style="text-transform:uppercase"></div>
     <div class="mfield"><label>Senha *</label><input id="reg-pwd" type="password" autocomplete="new-password" placeholder="Mínimo de 4 caracteres"></div>
     <div id="reg-status" style="min-height:18px;color:#e53935;font-size:.75rem;font-weight:700"></div>
@@ -874,7 +875,7 @@ input,select,textarea{-webkit-appearance:none}
 
     <div id="view-users" style="display:none">
       <div class="ph"><div class="ph-info"><div class="ph-title">👥 Usuários cadastrados</div><div class="ph-sub">Administradores podem redefinir senhas e conceder acesso administrativo</div></div><button class="fbtn" onclick="loadUsers()">Atualizar</button></div>
-      <div class="tcard"><div style="overflow-x:auto"><table class="dt"><thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Cadastrado em</th><th>Último acesso</th><th class="right">Ferramentas</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>
+      <div class="tcard"><div style="overflow-x:auto"><table class="dt"><thead><tr><th>Nome</th><th>Usuário</th><th>Função</th><th>Perfil</th><th>Cadastrado em</th><th>Último acesso</th><th class="right">Ferramentas</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>
     </div>
 
   </main>
@@ -1213,6 +1214,7 @@ function isAdmin() {
 
 function openRegister() {
   document.getElementById('reg-name').value = '';
+  document.getElementById('reg-job-title').value = '';
   document.getElementById('reg-user').value = '';
   document.getElementById('reg-pwd').value = '';
   document.getElementById('reg-status').textContent = '';
@@ -1221,11 +1223,13 @@ function openRegister() {
 
 function createAccount() {
   var displayName = document.getElementById('reg-name').value.trim();
+  var jobTitle = document.getElementById('reg-job-title').value;
   var username = document.getElementById('reg-user').value.trim();
   var password = document.getElementById('reg-pwd').value;
   var status = document.getElementById('reg-status');
   status.textContent = 'Criando conta...';
-  fetchWithRetry(API_BASE + '/api/register', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: displayName, username: username, password: password }) }, 1)
+  if (!jobTitle) { status.textContent = 'Selecione a função.'; return; }
+  fetchWithRetry(API_BASE + '/api/register', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: displayName, jobTitle: jobTitle, username: username, password: password }) }, 1)
     .then(function(response) { return response.json().then(function(body) {
       if (response.status === 409) return requestSession(username, password).then(function(session) { return { existingSession: session, username: username.toUpperCase() }; });
       if (!response.ok) throw new Error(body.error || 'Não foi possível criar a conta');
@@ -2960,7 +2964,7 @@ function loadUsers() {
   if (!isAdmin()) return;
   var tbody = document.getElementById('usersBody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7">Carregando...</td></tr>';
   fetch(API_BASE + '/api/users', { headers: apiHeaders(), cache: 'no-store' })
     .then(function(response) { if (!response.ok) throw new Error('Acesso negado'); return response.json(); })
     .then(function(result) {
@@ -2969,6 +2973,7 @@ function loadUsers() {
         var tr = document.createElement('tr');
         tr.appendChild(td(user.displayName || '—', ''));
         tr.appendChild(td(user.username || '—', 'mono'));
+        tr.appendChild(td(user.jobTitle || 'Não informado', ''));
         tr.appendChild(td(user.role === 'admin' ? 'Administrador' : 'Operador', ''));
         tr.appendChild(td(user.createdAt ? new Date(user.createdAt).toLocaleString('pt-BR') : 'Conta principal', 'small'));
         tr.appendChild(td(user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('pt-BR') : '—', 'small'));
@@ -2986,6 +2991,12 @@ function loadUsers() {
           role.textContent = user.role === 'admin' ? 'Remover admin' : '⭐ Tornar admin';
           role.onclick = function() { setUserRole(user.username, user.displayName, user.role === 'admin' ? 'user' : 'admin'); };
           actions.appendChild(role);
+          var job = document.createElement('button');
+          job.className = 'fbtn';
+          job.style.marginLeft = '5px';
+          job.textContent = '💼 Alterar função';
+          job.onclick = function() { setUserJobTitle(user.username, user.displayName, user.jobTitle); };
+          actions.appendChild(job);
           var remove = document.createElement('button');
           remove.className = 'fbtn danger';
           remove.style.marginLeft = '5px';
@@ -2998,7 +3009,7 @@ function loadUsers() {
         tr.appendChild(actions);
         tbody.appendChild(tr);
       });
-    }).catch(function(error) { tbody.innerHTML = '<tr><td colspan="6">' + error.message + '</td></tr>'; });
+    }).catch(function(error) { tbody.innerHTML = '<tr><td colspan="7">' + error.message + '</td></tr>'; });
 }
 
 function updateUserAccount(username, payload, successMessage) {
@@ -3024,6 +3035,14 @@ function setUserRole(username, displayName, role) {
   var label = role === 'admin' ? 'tornar ' + displayName + ' administrador' : 'remover o acesso administrativo de ' + displayName;
   if (!window.confirm('Confirma ' + label + '?')) return;
   updateUserAccount(username, { action: 'set_role', role: role }, role === 'admin' ? displayName + ' agora é administrador.' : displayName + ' agora é operador.');
+}
+
+function setUserJobTitle(username, displayName, currentJobTitle) {
+  var value = window.prompt('Informe a função de ' + displayName + ': LOG, OPS3, TEAM LEADER ou PS', currentJobTitle || '');
+  if (value === null) return;
+  value = String(value).trim().toUpperCase();
+  if (['LOG', 'OPS3', 'TEAM LEADER', 'PS'].indexOf(value) < 0) { showToast('Função inválida.', 'w'); return; }
+  updateUserAccount(username, { action: 'set_job_title', jobTitle: value }, 'Função de ' + displayName + ' alterada para ' + value + '.');
 }
 
 function deleteUserAccount(username, displayName) {

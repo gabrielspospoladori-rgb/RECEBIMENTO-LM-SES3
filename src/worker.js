@@ -61,6 +61,7 @@ async function createSessionToken(secret, user) {
     nonce: crypto.randomUUID(),
     username: user.username,
     displayName: user.displayName,
+    jobTitle: user.jobTitle || "",
     role: user.role
   })));
   var key = await hmacKey(secret);
@@ -124,9 +125,10 @@ async function requireSession(request, env) {
   var token = header.indexOf("Bearer ") === 0 ? header.slice(7) : "";
   var session = await verifySessionToken(token, env.SESSION_SECRET);
   if (!session || session.username === "MELI") return session;
-  var row = await env.DB.prepare("SELECT display_name, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(session.username).first();
+  var row = await env.DB.prepare("SELECT display_name, job_title, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(session.username).first();
   if (!row || row.active !== 1) return false;
   session.displayName = row.display_name;
+  session.jobTitle = row.job_title || "";
   session.role = row.role;
   return session;
 }
@@ -142,13 +144,13 @@ async function handleSession(request, env) {
   var user;
   if (username === "MELI") {
     if (!(await sameSecret(body.password, env.APP_PASSWORD))) return jsonResponse(request, { error: "Usuario ou senha incorretos" }, 401);
-    user = { username: "MELI", displayName: "MELI", role: "admin" };
+    user = { username: "MELI", displayName: "MELI", jobTitle: "TEAM LEADER", role: "admin" };
   } else {
-    var row = await env.DB.prepare("SELECT username, display_name, password_hash, password_salt, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(username).first();
+    var row = await env.DB.prepare("SELECT username, display_name, job_title, password_hash, password_salt, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(username).first();
     if (!row || row.active !== 1) return jsonResponse(request, { error: "Usuario ou senha incorretos" }, 401);
     var hash = await passwordHash(body.password, row.password_salt);
     if (!(await sameSecret(hash, row.password_hash))) return jsonResponse(request, { error: "Usuario ou senha incorretos" }, 401);
-    user = { username: row.username, displayName: row.display_name, role: row.role };
+    user = { username: row.username, displayName: row.display_name, jobTitle: row.job_title || "", role: row.role };
     await env.DB.prepare("UPDATE app_users SET last_login_at = ?1 WHERE username = ?2").bind(new Date().toISOString(), row.username).run();
   }
   var token = await createSessionToken(env.SESSION_SECRET, user);
@@ -184,16 +186,18 @@ async function handleRegister(request, env) {
   var body = await readJson(request);
   var username = normalizeUsername(body && body.username);
   var displayName = String(body && body.displayName || "").trim();
+  var jobTitle = String(body && body.jobTitle || "").trim().toUpperCase();
   var password = String(body && body.password || "");
   if (!/^[A-Z0-9._-]{3,32}$/.test(username) || username === "MELI") return jsonResponse(request, { error: "Usuario invalido ou reservado" }, 400);
   if (displayName.length < 2 || displayName.length > 80) return jsonResponse(request, { error: "Nome deve ter entre 2 e 80 caracteres" }, 400);
+  if (["LOG", "OPS3", "TEAM LEADER", "PS"].indexOf(jobTitle) < 0) return jsonResponse(request, { error: "Selecione uma funcao valida" }, 400);
   if (password.length < 4 || password.length > 128) return jsonResponse(request, { error: "Senha deve ter pelo menos 4 caracteres" }, 400);
   var salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
   var hash = await passwordHash(password, salt);
   var now = new Date().toISOString();
   try {
-    await env.DB.prepare("INSERT INTO app_users (id, username, display_name, password_hash, password_salt, role, active, created_at) VALUES (?1, ?2, ?3, ?4, ?5, 'user', 1, ?6)")
-      .bind(crypto.randomUUID(), username, displayName, hash, salt, now).run();
+    await env.DB.prepare("INSERT INTO app_users (id, username, display_name, job_title, password_hash, password_salt, role, active, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'user', 1, ?7)")
+      .bind(crypto.randomUUID(), username, displayName, jobTitle, hash, salt, now).run();
   } catch (error) {
     if (String(error && error.message || "").toLowerCase().indexOf("unique") >= 0) return jsonResponse(request, { error: "Usuario ja cadastrado" }, 409);
     throw error;
@@ -204,10 +208,10 @@ async function handleRegister(request, env) {
 
 async function handleUsers(request, env, session) {
   if (!session || session.role !== "admin") return jsonResponse(request, { error: "Acesso exclusivo do administrador" }, 403);
-  var rows = await env.DB.prepare("SELECT username, display_name, role, active, created_at, last_login_at FROM app_users ORDER BY created_at DESC").all();
-  var users = [{ username: "MELI", displayName: "MELI", role: "admin", active: 1, createdAt: null, lastLoginAt: null }];
+  var rows = await env.DB.prepare("SELECT username, display_name, job_title, role, active, created_at, last_login_at FROM app_users ORDER BY created_at DESC").all();
+  var users = [{ username: "MELI", displayName: "MELI", jobTitle: "TEAM LEADER", role: "admin", active: 1, createdAt: null, lastLoginAt: null }];
   var results = rows.results || [];
-  for (var i = 0; i < results.length; i++) users.push({ username: results[i].username, displayName: results[i].display_name, role: results[i].role, active: results[i].active, createdAt: results[i].created_at, lastLoginAt: results[i].last_login_at });
+  for (var i = 0; i < results.length; i++) users.push({ username: results[i].username, displayName: results[i].display_name, jobTitle: results[i].job_title || "", role: results[i].role, active: results[i].active, createdAt: results[i].created_at, lastLoginAt: results[i].last_login_at });
   return jsonResponse(request, { users: users });
 }
 
@@ -215,7 +219,7 @@ async function handleUserAdminUpdate(request, env, session, username) {
   if (!session || session.role !== "admin") return jsonResponse(request, { error: "Acesso exclusivo do administrador" }, 403);
   username = normalizeUsername(username);
   if (!/^[A-Z0-9._-]{3,32}$/.test(username) || username === "MELI") return jsonResponse(request, { error: "A conta principal MELI nao pode ser alterada" }, 400);
-  var user = await env.DB.prepare("SELECT username, display_name, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(username).first();
+  var user = await env.DB.prepare("SELECT username, display_name, job_title, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(username).first();
   if (!user) return jsonResponse(request, { error: "Usuario nao encontrado" }, 404);
   var body = await readJson(request);
   if (body.action === "reset_password") {
@@ -234,6 +238,13 @@ async function handleUserAdminUpdate(request, env, session, username) {
     await env.DB.prepare("UPDATE app_users SET role = ?1 WHERE username = ?2 COLLATE NOCASE").bind(role, username).run();
     await audit(env, session, (role === "admin" ? "promoveu_admin:" : "removeu_admin:") + username);
     return jsonResponse(request, { ok: true, role: role });
+  }
+  if (body.action === "set_job_title") {
+    var jobTitle = String(body.jobTitle || "").trim().toUpperCase();
+    if (["LOG", "OPS3", "TEAM LEADER", "PS"].indexOf(jobTitle) < 0) return jsonResponse(request, { error: "Funcao invalida" }, 400);
+    await env.DB.prepare("UPDATE app_users SET job_title = ?1 WHERE username = ?2 COLLATE NOCASE").bind(jobTitle, username).run();
+    await audit(env, session, "alterou_funcao:" + username + ":" + jobTitle);
+    return jsonResponse(request, { ok: true, jobTitle: jobTitle });
   }
   if (body.action === "delete_user") {
     if (username === session.username) return jsonResponse(request, { error: "Voce nao pode excluir sua propria conta" }, 400);
