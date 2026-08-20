@@ -309,6 +309,64 @@ async function handleGetData(request, env) {
   return jsonResponse(request, { data: decryptStoredData(JSON.parse(row.payload), env.APP_PASSWORD), revision: row.revision, updatedAt: row.updated_at });
 }
 
+function bindOperationalActors(incoming, current, session) {
+  var actor = { username: session.username, displayName: session.displayName };
+  var currentPkgs = current && Array.isArray(current.pkgs) ? current.pkgs : [];
+  var existingPkgs = {};
+  for (var i = 0; i < currentPkgs.length; i++) existingPkgs[String(currentPkgs[i].id)] = currentPkgs[i];
+  if (Array.isArray(incoming.pkgs)) {
+    for (var p = 0; p < incoming.pkgs.length; p++) {
+      var item = incoming.pkgs[p];
+      var old = existingPkgs[String(item.id)];
+      if (!old) {
+        item.receiver = actor.displayName;
+        item.submittedBy = actor.username;
+        item.submittedByName = actor.displayName;
+      } else {
+        item.submittedBy = old.submittedBy || actor.username;
+        item.submittedByName = old.submittedByName || old.receiver || actor.displayName;
+        var receiptChanged = item.status !== old.status || item.receivedAt !== old.receivedAt;
+        item.receiver = receiptChanged ? actor.displayName : (old.receiver || item.submittedByName);
+        if (JSON.stringify(item) !== JSON.stringify(old)) {
+          item.lastModifiedBy = actor.username;
+          item.lastModifiedByName = actor.displayName;
+        }
+      }
+    }
+  }
+  var collections = ["faltanteReg", "voandoReg"];
+  for (var c = 0; c < collections.length; c++) {
+    var name = collections[c];
+    var oldItems = current && Array.isArray(current[name]) ? current[name] : [];
+    var oldIds = {};
+    for (var o = 0; o < oldItems.length; o++) oldIds[String(oldItems[o].id)] = oldItems[o];
+    if (!Array.isArray(incoming[name])) continue;
+    for (var n = 0; n < incoming[name].length; n++) {
+      var record = incoming[name][n];
+      var previous = oldIds[String(record.id)];
+      record.submittedBy = previous && previous.submittedBy ? previous.submittedBy : actor.username;
+      record.submittedByName = previous && previous.submittedByName ? previous.submittedByName : actor.displayName;
+    }
+  }
+  var oldSessions = current && Array.isArray(current.nexSessions) ? current.nexSessions : [];
+  var sessionsById = {};
+  for (var os = 0; os < oldSessions.length; os++) sessionsById[String(oldSessions[os].id)] = oldSessions[os];
+  if (Array.isArray(incoming.nexSessions)) {
+    for (var ns = 0; ns < incoming.nexSessions.length; ns++) {
+      var nexSession = incoming.nexSessions[ns];
+      var priorSession = sessionsById[String(nexSession.id)];
+      var priorPackages = priorSession && Array.isArray(priorSession.packages) ? priorSession.packages : [];
+      var actors = Object.assign({}, priorSession && priorSession.actors || {}, nexSession.actors || {});
+      var packages = Array.isArray(nexSession.packages) ? nexSession.packages : [];
+      for (var np = 0; np < packages.length; np++) {
+        if (priorPackages.indexOf(packages[np]) < 0) actors[packages[np]] = actor;
+      }
+      nexSession.actors = actors;
+    }
+  }
+  return incoming;
+}
+
 async function handlePutData(request, env, session) {
   var body = await readJson(request);
   if (!body || !body.data || typeof body.data !== "object" || typeof body.revision !== "number") {
@@ -316,6 +374,9 @@ async function handlePutData(request, env, session) {
   }
   var now = new Date().toISOString();
   var incomingData = body.data && body.data.enc ? decryptStoredData(body.data, env.APP_PASSWORD) : body.data;
+  var currentState = await readState(env);
+  var currentData = currentState ? decryptStoredData(JSON.parse(currentState.payload), env.APP_PASSWORD) : {};
+  incomingData = bindOperationalActors(incomingData, currentData, session);
   var storedData = encryptStoredData(incomingData, env.APP_PASSWORD);
   var result = await env.DB.prepare(
     "UPDATE app_state SET payload = ?1, revision = revision + 1, updated_at = ?2 WHERE id = 1 AND revision = ?3"

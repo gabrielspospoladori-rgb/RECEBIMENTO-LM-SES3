@@ -462,7 +462,7 @@ input,select,textarea{-webkit-appearance:none}
   <div class="scan-wrap">
     <span class="scan-ico">📟</span>
     <input type="text" id="scanInput" class="scan-inp" placeholder="Bipe o ID do pacote..." autocomplete="off" autofocus>
-    <input type="text" id="defReceiver" class="meta-inp" placeholder="Triador" readonly title="Preenchido automaticamente pela conta">
+    <input type="text" id="defReceiver" class="meta-inp" placeholder="Triador" readonly tabindex="-1" aria-readonly="true" title="Nome fixo da conta conectada" style="cursor:not-allowed;background:#F3F4F6">
     <input type="text" id="defDriver"   class="meta-inp" placeholder="Motorista">
     <input type="text" id="defPlate"    class="meta-inp short" placeholder="Placa">
     <select id="defFacility" class="meta-inp facility" title="Facility"><option>XPT</option><option>SVC</option><option>NEX</option></select>
@@ -690,7 +690,7 @@ input,select,textarea{-webkit-appearance:none}
         <div style="font-size:0.78rem;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Histórico de Pacotes Voando</div>
         <div class="tbl-wrap" style="overflow-x:auto">
           <table class="data-tbl">
-            <thead><tr><th>DATA</th><th>FACILITY TIPO</th><th>FACILITY</th><th>ID DO PACOTE</th><th>FOTO</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+            <thead><tr><th>DATA</th><th>FACILITY TIPO</th><th>FACILITY</th><th>ID DO PACOTE</th><th>REGISTRADO POR</th><th>FOTO</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
             <tbody id="voa-reg-body"></tbody>
           </table>
         </div>
@@ -738,7 +738,7 @@ input,select,textarea{-webkit-appearance:none}
         <div style="font-size:0.78rem;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Histórico de Faltantes Registrados</div>
         <div class="tbl-wrap" style="overflow-x:auto">
           <table class="data-tbl">
-            <thead><tr><th>DATA</th><th>FACILITY TIPO</th><th>FACILITY</th><th>ID DO PACOTE</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+            <thead><tr><th>DATA</th><th>FACILITY TIPO</th><th>FACILITY</th><th>ID DO PACOTE</th><th>REGISTRADO POR</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
             <tbody id="flt-reg-body"></tbody>
           </table>
         </div>
@@ -843,6 +843,7 @@ input,select,textarea{-webkit-appearance:none}
                   <th>AGÊNCIA</th>
                   <th>QTD PACOTES</th>
                   <th>IDs</th>
+                  <th>REGISTRADO POR</th>
                   <th>AÇÕES</th>
                 </tr>
               </thead>
@@ -1016,7 +1017,7 @@ input,select,textarea{-webkit-appearance:none}
   <div class="modal" style="max-width:440px">
     <div class="mhd">📷 Confirmar recebimento pela câmera</div>
     <div class="mfield"><label>ID do pacote lido *</label><input id="sd-package-id" placeholder="Confira ou corrija o ID" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:monospace;font-weight:900;text-transform:uppercase"></div>
-    <div class="mfield"><label>Triador / Responsável *</label><input id="sd-receiver" placeholder="Nome do triador" readonly></div>
+    <div class="mfield"><label>Triador / Responsável *</label><input id="sd-receiver" placeholder="Nome do triador" readonly tabindex="-1" aria-readonly="true" title="Nome fixo da conta conectada" style="cursor:not-allowed;background:#F3F4F6"></div>
     <div class="mfield"><label>Motorista *</label><input id="sd-driver" placeholder="Nome do motorista" autocomplete="name"></div>
     <div class="mfield"><label>Placa do veículo *</label><input id="sd-plate" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase" autocomplete="off"></div>
     <div class="mfield"><label>Facility *</label><select id="sd-facility"><option>XPT</option><option>SVC</option><option>NEX</option></select></div>
@@ -1668,17 +1669,15 @@ function setSyncUI(state) {
 =================================================================== */
 function appInit() {
   // Restore field defaults
-  var savedRecv  = localStorage.getItem('pkg_recv') || '';
   var savedDrv   = localStorage.getItem('pkg_drv')  || '';
   var savedPlate = localStorage.getItem('pkg_plt')  || '';
   var savedFacility = localStorage.getItem('pkg_facility') || 'XPT';
   var savedLocation = localStorage.getItem('pkg_location') || 'EES3 - SÃO MATEUS';
   var savedDate = localStorage.getItem('pkg_date') || todayInputValue();
-  if (savedRecv === '—') savedRecv = '';
   if (savedDrv === '—') savedDrv = '';
   if (savedPlate === '—') savedPlate = '';
   var signedUser = currentUser();
-  document.getElementById('defReceiver').value = signedUser ? signedUser.displayName : savedRecv;
+  document.getElementById('defReceiver').value = signedUser ? signedUser.displayName : '';
   document.getElementById('defDriver').value   = savedDrv;
   document.getElementById('defPlate').value    = savedPlate;
   document.getElementById('defFacility').value = savedFacility;
@@ -1797,7 +1796,8 @@ function normalizePackageId(raw) {
 
 function openCameraScanDetails(raw) {
   pendingCameraRaw = String(raw || '').trim();
-  var receiver = document.getElementById('defReceiver').value.trim();
+  var actor = currentUser();
+  var receiver = actor ? actor.displayName : '';
   var driver = document.getElementById('defDriver').value.trim();
   var plate = document.getElementById('defPlate').value.trim();
   var facility = document.getElementById('defFacility').value;
@@ -1817,15 +1817,15 @@ function openCameraScanDetails(raw) {
   document.getElementById('sd-status').textContent = '';
   openModal('scanDetailsModal');
   setTimeout(function() {
-    var firstEmpty = !document.getElementById('sd-receiver').value ? document.getElementById('sd-receiver') :
-      (!document.getElementById('sd-driver').value ? document.getElementById('sd-driver') : document.getElementById('sd-plate'));
+    var firstEmpty = !document.getElementById('sd-driver').value ? document.getElementById('sd-driver') : document.getElementById('sd-plate');
     if (firstEmpty) firstEmpty.focus();
   }, 100);
 }
 
 function confirmCameraScan() {
   var packageId = normalizePackageId(document.getElementById('sd-package-id').value);
-  var receiver = document.getElementById('sd-receiver').value.trim();
+  var actor = currentUser();
+  var receiver = actor ? actor.displayName : '';
   var driver = document.getElementById('sd-driver').value.trim();
   var plate = document.getElementById('sd-plate').value.trim().toUpperCase();
   var facility = document.getElementById('sd-facility').value;
@@ -1905,14 +1905,13 @@ function confirmDup() {
 
 function execScan(id, tag) {
   var actor = currentUser() || { username: 'DESCONHECIDO', displayName: 'Desconhecido' };
-  var recv  = document.getElementById('defReceiver').value.trim() || '—';
+  var recv  = actor.displayName;
   var drv   = document.getElementById('defDriver').value.trim()   || '—';
   var plate = document.getElementById('defPlate').value.trim().toUpperCase() || '—';
   var facility = document.getElementById('defFacility').value || 'XPT';
   var location = document.getElementById('defLocation').value || 'EES3 - SÃO MATEUS';
   var operationDate = document.getElementById('defDate').value || todayInputValue();
 
-  localStorage.setItem('pkg_recv', recv);
   localStorage.setItem('pkg_drv',  drv);
   localStorage.setItem('pkg_plt',  plate);
   localStorage.setItem('pkg_facility', facility);
@@ -2641,7 +2640,7 @@ function saveAddPending() {
     reason:      rsn,
     plate:       plate,
     driver:      drv,
-    receiver:    '—',
+    receiver:    actor.displayName,
     facility:    document.getElementById('defFacility').value || 'XPT',
     location:    document.getElementById('defLocation').value || 'EES3 - SÃO MATEUS',
     operationDate: document.getElementById('defDate').value || todayInputValue(),
@@ -3559,7 +3558,7 @@ function renderNexHistory() {
   if (nexSessions.length === 0) {
     var tr = document.createElement('tr');
     var td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.style.cssText = 'text-align:center;color:#9CA3AF;padding:24px;font-size:0.8rem';
     td.textContent = 'Nenhuma sessao NEX registrada ainda.';
     tr.appendChild(td);
@@ -3595,6 +3594,14 @@ function renderNexHistory() {
     if (photoCount) tdIds.textContent += ' · 📷 ' + photoCount;
 
     var tdAct = document.createElement('td');
+    var tdActor = document.createElement('td');
+    var actorNames = [];
+    var sessionActors = s.actors || {};
+    Object.keys(sessionActors).forEach(function(pkg) {
+      var name = sessionActors[pkg] && sessionActors[pkg].displayName;
+      if (name && actorNames.indexOf(name) < 0) actorNames.push(name);
+    });
+    tdActor.textContent = actorNames.join(', ') || '—';
     var delBtn = document.createElement('button');
     delBtn.style.cssText = 'background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;font-weight:700;cursor:pointer';
     delBtn.textContent = 'Del';
@@ -3615,6 +3622,7 @@ function renderNexHistory() {
     tr.appendChild(tdAgency);
     tr.appendChild(tdCount);
     tr.appendChild(tdIds);
+    tr.appendChild(tdActor);
     tr.appendChild(tdAct);
     tbody.appendChild(tr);
   }
@@ -3673,7 +3681,8 @@ function addFaltanteReg() {
   if (!pkgId || !pkgId.trim()) { if (status) { status.textContent = 'Informe o ID do pacote.'; status.style.color='#e53935'; } return; }
   if (!facType) { if (status) { status.textContent = 'Selecione o tipo de facility.'; status.style.color='#e53935'; } return; }
   if (!facSub)  { if (status) { status.textContent = 'Selecione a facility.'; status.style.color='#e53935'; } return; }
-  var entry = { id: 'FLT-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  var actor = currentUser() || { username: 'DESCONHECIDO', displayName: 'Desconhecido' };
+  var entry = { id: 'FLT-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), submittedBy: actor.username, submittedByName: actor.displayName, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   faltanteReg.unshift(entry);
   persistFaltanteReg();
   document.getElementById('fltPkgId').value = '';
@@ -3688,7 +3697,7 @@ function renderFaltanteRegTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
   if (faltanteReg.length === 0) {
-    var tr = document.createElement('tr'); var td = document.createElement('td'); td.colSpan = 6; td.style.cssText = 'text-align:center;color:#9CA3AF;padding:20px;font-size:0.8rem'; td.textContent = 'Nenhum faltante registrado.'; tr.appendChild(td); tbody.appendChild(tr); return;
+    var tr = document.createElement('tr'); var td = document.createElement('td'); td.colSpan = 7; td.style.cssText = 'text-align:center;color:#9CA3AF;padding:20px;font-size:0.8rem'; td.textContent = 'Nenhum faltante registrado.'; tr.appendChild(td); tbody.appendChild(tr); return;
   }
   for (var i = 0; i < faltanteReg.length; i++) {
     var e = faltanteReg[i];
@@ -3697,6 +3706,7 @@ function renderFaltanteRegTable() {
     for (var j = 0; j < voandoReg.length; j++) { if (voandoReg[j].packageId === e.packageId) { isAchado = true; break; } }
     var cells = [e.date, e.facilityType, e.facility, e.packageId];
     for (var k = 0; k < cells.length; k++) { var td2 = document.createElement('td'); td2.textContent = cells[k]; if (k===3) td2.style.fontWeight='700'; tr.appendChild(td2); }
+    var tdActor = document.createElement('td'); tdActor.textContent = e.submittedByName || '—'; tr.appendChild(tdActor);
     var tdStatus = document.createElement('td');
     if (isAchado) { var sp = document.createElement('span'); sp.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp.textContent='🎯 Achado'; tdStatus.appendChild(sp); }
     else { var sp2 = document.createElement('span'); sp2.style.cssText='background:#FEE2E2;color:#991b1b;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp2.textContent='❓ Faltante'; tdStatus.appendChild(sp2); }
@@ -3777,7 +3787,8 @@ function addVoandoReg() {
   if (!pkgId || !pkgId.trim()) { if (status) { status.textContent = 'Informe o ID do pacote.'; status.style.color='#e53935'; } return; }
   if (!facType) { if (status) { status.textContent = 'Selecione o tipo de facility.'; status.style.color='#e53935'; } return; }
   if (!facSub)  { if (status) { status.textContent = 'Selecione a facility.'; status.style.color='#e53935'; } return; }
-  var entry = { id: 'VOA-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), photo: voaPhotoData || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  var actor = currentUser() || { username: 'DESCONHECIDO', displayName: 'Desconhecido' };
+  var entry = { id: 'VOA-' + Date.now(), date: date, facilityType: facType, facility: facSub, packageId: pkgId.trim(), photo: voaPhotoData || null, submittedBy: actor.username, submittedByName: actor.displayName, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   voandoReg.unshift(entry);
   persistVoandoReg();
   document.getElementById('voaPkgId').value = '';
@@ -3796,7 +3807,7 @@ function renderVoandoRegTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
   if (voandoReg.length === 0) {
-    var tr = document.createElement('tr'); var td = document.createElement('td'); td.colSpan=7; td.style.cssText='text-align:center;color:#9CA3AF;padding:20px;font-size:0.8rem'; td.textContent='Nenhum pacote voando registrado.'; tr.appendChild(td); tbody.appendChild(tr); return;
+    var tr = document.createElement('tr'); var td = document.createElement('td'); td.colSpan=8; td.style.cssText='text-align:center;color:#9CA3AF;padding:20px;font-size:0.8rem'; td.textContent='Nenhum pacote voando registrado.'; tr.appendChild(td); tbody.appendChild(tr); return;
   }
   for (var i = 0; i < voandoReg.length; i++) {
     var e = voandoReg[i];
@@ -3805,6 +3816,7 @@ function renderVoandoRegTable() {
     for (var j = 0; j < faltanteReg.length; j++) { if (faltanteReg[j].packageId === e.packageId) { isAchado=true; break; } }
     var cells = [e.date, e.facilityType, e.facility, e.packageId];
     for (var k=0; k<cells.length; k++) { var td2=document.createElement('td'); td2.textContent=cells[k]; if(k===3)td2.style.fontWeight='700'; tr.appendChild(td2); }
+    var tdActor=document.createElement('td'); tdActor.textContent=e.submittedByName || '—'; tr.appendChild(tdActor);
     var tdPhoto = document.createElement('td');
     if (e.photo) { var img=document.createElement('img'); img.src=e.photo; img.style.cssText='width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #E5E7EB;cursor:pointer'; img.onclick=(function(src){return function(){var w=window.open();w.document.write('<img src="'+src+'" style="max-width:100%">');}})(e.photo); tdPhoto.appendChild(img); } else { tdPhoto.textContent='—'; tdPhoto.style.color='#9CA3AF'; }
     tr.appendChild(tdPhoto);
