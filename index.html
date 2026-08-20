@@ -1135,6 +1135,37 @@ function simpleHash(str) {
   return result;
 }
 
+function fetchWithRetry(url, options, retries) {
+  return fetch(url, options).catch(function(error) {
+    if ((retries || 0) <= 0) throw error;
+    return new Promise(function(resolve) { setTimeout(resolve, 700); }).then(function() {
+      return fetchWithRetry(url, options, retries - 1);
+    });
+  });
+}
+
+function requestSession(username, password) {
+  return fetchWithRetry(API_BASE + '/api/session', {
+    method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username, password: password })
+  }, 1).then(function(response) {
+    return response.json().catch(function() { return {}; }).then(function(body) {
+      if (!response.ok) throw new Error(body.error || (response.status === 401 ? 'Usuário ou senha incorretos.' : 'Erro de conexão.'));
+      return body;
+    });
+  });
+}
+
+function enterSession(result) {
+  if (!result.token) throw new Error('Sessão inválida.');
+  sessionStorage.setItem(SESSION_KEY, '1');
+  sessionStorage.setItem(API_TOKEN_KEY, result.token);
+  sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(result.user));
+  var screen = document.getElementById('login-screen');
+  if (screen) screen.style.display = 'none';
+  appInit();
+}
+
 function doLogin() {
   var username = (document.getElementById('login-user') || {}).value || '';
   var pwd = (document.getElementById('login-pwd') || {}).value || '';
@@ -1142,25 +1173,11 @@ function doLogin() {
   if (!username.trim() || !pwd.trim()) { if (err) err.textContent = 'Digite o usuário e a senha.'; return; }
   if (err) err.textContent = 'Verificando...';
 
-  fetch(API_BASE + '/api/session', {
-    method: 'POST',
-    cache: 'no-store',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username, password: pwd })
-  }).then(function(response) {
-    if (!response.ok) throw new Error(response.status === 401 ? 'Senha incorreta.' : 'Erro de conexao.');
-    return response.json();
-  }).then(function(result) {
-    if (!result.token) throw new Error('Sessao invalida.');
-    sessionStorage.setItem(SESSION_KEY, '1');
-    sessionStorage.setItem(API_TOKEN_KEY, result.token);
-    sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(result.user));
-    var screen = document.getElementById('login-screen');
-    if (screen) screen.style.display = 'none';
+  requestSession(username, pwd).then(function(result) {
+    enterSession(result);
     if (err) err.textContent = '';
-    appInit();
   }).catch(function(error) {
-    if (err) err.textContent = error && error.message ? error.message : 'Sem conexao. Tente novamente.';
+    if (err) err.textContent = error && error.message && error.message !== 'Load failed' ? error.message : 'Conexão instável. Toque em Entrar novamente.';
     var inp = document.getElementById('login-pwd');
     if (inp) { inp.value = ''; inp.focus(); inp.style.borderColor = '#e53935'; setTimeout(function() { inp.style.borderColor = '#E5E7EB'; }, 1500); }
   });
@@ -1207,14 +1224,24 @@ function createAccount() {
   var password = document.getElementById('reg-pwd').value;
   var status = document.getElementById('reg-status');
   status.textContent = 'Criando conta...';
-  fetch(API_BASE + '/api/register', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: displayName, username: username, password: password }) })
-    .then(function(response) { return response.json().then(function(body) { if (!response.ok) throw new Error(body.error || 'Não foi possível criar a conta'); return body; }); })
+  fetchWithRetry(API_BASE + '/api/register', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: displayName, username: username, password: password }) }, 1)
+    .then(function(response) { return response.json().then(function(body) {
+      if (response.status === 409) return requestSession(username, password).then(function(session) { return { existingSession: session, username: username.toUpperCase() }; });
+      if (!response.ok) throw new Error(body.error || 'Não foi possível criar a conta');
+      return body;
+    }); })
     .then(function(result) {
+      if (result.existingSession) {
+        closeModal('registerModal');
+        enterSession(result.existingSession);
+        showToast('Conta já criada. Acesso realizado com sucesso.', 's');
+        return;
+      }
       document.getElementById('login-user').value = result.username;
       closeModal('registerModal');
       showToast('Conta criada. Entre com sua senha.', 's');
       document.getElementById('login-pwd').focus();
-    }).catch(function(error) { status.textContent = error.message || 'Erro ao criar conta.'; });
+    }).catch(function(error) { status.textContent = error.message && error.message !== 'Load failed' ? error.message : 'Conexão instável. Tente novamente.'; });
 }
 
 /* ===================================================================
