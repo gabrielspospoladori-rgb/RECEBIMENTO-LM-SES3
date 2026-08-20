@@ -421,13 +421,29 @@ input,select,textarea{-webkit-appearance:none}
     <img src="https://http2.mlstatic.com/frontend-assets/ui-navigation/5.21.22/mercadolibre/logo__large_plus@2x.png" style="height:36px;margin-bottom:20px" alt="MercadoLibre">
     <div style="font-size:1rem;font-weight:900;color:#1C1C1E;margin-bottom:4px">Recebimento de Pacotes</div>
     <div style="font-size:0.75rem;color:#6B7280;margin-bottom:24px">Última Milha — Acesso Restrito</div>
+    <div style="text-align:left;margin-bottom:10px">
+      <label style="font-size:0.72rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Usuário</label>
+      <input id="login-user" type="text" placeholder="Digite seu usuário..." autocomplete="username" style="width:100%;padding:10px 14px;border:2px solid #E5E7EB;border-radius:10px;font-size:0.95rem;font-family:inherit;box-sizing:border-box;text-transform:uppercase">
+    </div>
     <div style="text-align:left;margin-bottom:16px">
-      <label style="font-size:0.72rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Senha de Acesso</label>
+      <label style="font-size:0.72rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Senha</label>
       <input id="login-pwd" type="password" placeholder="Digite a senha..." style="width:100%;padding:10px 14px;border:2px solid #E5E7EB;border-radius:10px;font-size:0.95rem;font-family:inherit;box-sizing:border-box" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <div id="login-error" style="color:#e53935;font-size:0.75rem;font-weight:700;margin-bottom:12px;min-height:18px"></div>
     <button onclick="doLogin()" style="width:100%;background:#FFE600;color:#1C1C1E;border:none;border-radius:10px;padding:12px;font-size:0.95rem;font-weight:900;cursor:pointer;font-family:inherit">Entrar</button>
+    <button onclick="openRegister()" style="width:100%;background:#fff;color:#3483FA;border:1px solid #3483FA;border-radius:10px;padding:10px;font-size:.85rem;font-weight:800;cursor:pointer;font-family:inherit;margin-top:8px">Criar minha conta</button>
     <div style="font-size:0.65rem;color:#9CA3AF;margin-top:16px">SES3 — Controle de Insucessos</div>
+  </div>
+</div>
+
+<div class="overlay" id="registerModal" style="z-index:10000">
+  <div class="modal" style="max-width:360px">
+    <div class="mhd">👤 Criar conta</div>
+    <div class="mfield"><label>Nome completo *</label><input id="reg-name" autocomplete="name" placeholder="Nome que aparecerá como triador"></div>
+    <div class="mfield"><label>Usuário *</label><input id="reg-user" autocomplete="username" placeholder="Ex.: JOAO.SILVA" style="text-transform:uppercase"></div>
+    <div class="mfield"><label>Senha *</label><input id="reg-pwd" type="password" autocomplete="new-password" placeholder="Mínimo de 4 caracteres"></div>
+    <div id="reg-status" style="min-height:18px;color:#e53935;font-size:.75rem;font-weight:700"></div>
+    <div class="mft"><button class="fbtn prim" onclick="createAccount()">Criar conta</button><button class="fbtn" onclick="closeModal('registerModal')">Cancelar</button></div>
   </div>
 </div>
 
@@ -446,7 +462,7 @@ input,select,textarea{-webkit-appearance:none}
   <div class="scan-wrap">
     <span class="scan-ico">📟</span>
     <input type="text" id="scanInput" class="scan-inp" placeholder="Bipe o ID do pacote..." autocomplete="off" autofocus>
-    <input type="text" id="defReceiver" class="meta-inp" placeholder="Triador">
+    <input type="text" id="defReceiver" class="meta-inp" placeholder="Triador" readonly title="Preenchido automaticamente pela conta">
     <input type="text" id="defDriver"   class="meta-inp" placeholder="Motorista">
     <input type="text" id="defPlate"    class="meta-inp short" placeholder="Placa">
     <select id="defFacility" class="meta-inp facility" title="Facility"><option>XPT</option><option>SVC</option><option>NEX</option></select>
@@ -515,6 +531,7 @@ input,select,textarea{-webkit-appearance:none}
     <button class="nav-btn"        id="nl-analytics" onclick="nav('analytics')"><span class="nav-ico">📊</span>Gráficos</button>
     <div class="nav-section-label" style="padding:10px 12px 4px;font-size:0.58rem;font-weight:700;text-transform:uppercase;color:#9CA3AF;letter-spacing:.5px">NEX</div>
     <button class="nav-btn" id="nb-nex" onclick="nav('nex')"><span class="nav-icon">🏢</span><span>NEX Agência</span></button>
+    <button class="nav-btn" id="nb-users" onclick="nav('users')" style="display:none"><span class="nav-icon">👥</span><span>Usuários</span></button>
 
     <div class="sb-footer">
       <div class="prog-row"><span>Resolução</span><span class="prog-pct" id="progPct">0%</span></div>
@@ -532,7 +549,7 @@ input,select,textarea{-webkit-appearance:none}
         <div class="ph-info"><div class="ph-title">Todos os Pacotes</div><div class="ph-sub">Visão completa de bipagens e pendentes</div></div>
         <div class="ph-actions">
           <button class="fbtn prim" onclick="openAddPending()">+ Adicionar Pendente</button>
-          <button class="fbtn danger" onclick="reqClear()">🗑 Limpar Tudo</button>
+          <button class="fbtn danger" id="clearAllBtn" onclick="reqClear()" style="display:none">🗑 Limpar Tudo</button>
         </div>
       </div>
       <div class="tcard">
@@ -550,7 +567,7 @@ input,select,textarea{-webkit-appearance:none}
         <div style="overflow-x:auto"><table class="dt">
           <thead><tr>
             <th>ID do Pacote</th><th>Data</th><th>Facility</th><th>Local</th><th>Motivo</th><th>Placa</th><th>Motorista</th>
-            <th>Triador</th><th>Desde</th><th>Recebido Em</th>
+            <th>Triador</th><th>Enviado por</th><th>Desde</th><th>Recebido Em</th>
             <th class="center">Status</th><th class="right">Ações</th>
           </tr></thead>
           <tbody id="gridBody"></tbody>
@@ -623,7 +640,7 @@ input,select,textarea{-webkit-appearance:none}
         <div style="overflow-x:auto"><table class="dt">
           <thead><tr>
             <th>ID do Pacote</th><th>Data</th><th>Facility</th><th>Local</th><th>Comprovante</th><th>Motivo</th><th>Placa</th>
-            <th>Motorista</th><th>Triador</th><th>Desde</th><th>Recebido Em</th>
+            <th>Motorista</th><th>Triador</th><th>Enviado por</th><th>Desde</th><th>Recebido Em</th>
           </tr></thead>
           <tbody id="recBody"></tbody>
         </table></div>
@@ -854,6 +871,11 @@ input,select,textarea{-webkit-appearance:none}
       </div>
     </div><!-- end view-achados -->
 
+    <div id="view-users" style="display:none">
+      <div class="ph"><div class="ph-info"><div class="ph-title">👥 Usuários cadastrados</div><div class="ph-sub">Acesso exclusivo do administrador MELI</div></div><button class="fbtn" onclick="loadUsers()">Atualizar</button></div>
+      <div class="tcard"><div style="overflow-x:auto"><table class="dt"><thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Cadastrado em</th><th>Último acesso</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>
+    </div>
+
   </main>
 </div>
 
@@ -905,6 +927,10 @@ input,select,textarea{-webkit-appearance:none}
         <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;grid-column:1 / -1">
           <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Data do registro</div>
           <div style="font-size:0.9rem;font-weight:800;color:#065f46" id="rc-operation-date"></div>
+        </div>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;grid-column:1 / -1">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Enviado por</div>
+          <div style="font-size:0.9rem;font-weight:800;color:#1C1C1E" id="rc-submitted-by"></div>
         </div>
       </div>
 
@@ -990,7 +1016,7 @@ input,select,textarea{-webkit-appearance:none}
   <div class="modal" style="max-width:440px">
     <div class="mhd">📷 Confirmar recebimento pela câmera</div>
     <div class="mfield"><label>ID do pacote lido *</label><input id="sd-package-id" placeholder="Confira ou corrija o ID" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:monospace;font-weight:900;text-transform:uppercase"></div>
-    <div class="mfield"><label>Triador / Responsável *</label><input id="sd-receiver" placeholder="Nome do triador" autocomplete="name"></div>
+    <div class="mfield"><label>Triador / Responsável *</label><input id="sd-receiver" placeholder="Nome do triador" readonly></div>
     <div class="mfield"><label>Motorista *</label><input id="sd-driver" placeholder="Nome do motorista" autocomplete="name"></div>
     <div class="mfield"><label>Placa do veículo *</label><input id="sd-plate" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase" autocomplete="off"></div>
     <div class="mfield"><label>Facility *</label><select id="sd-facility"><option>XPT</option><option>SVC</option><option>NEX</option></select></div>
@@ -1067,6 +1093,12 @@ input,select,textarea{-webkit-appearance:none}
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="overlay" id="photoViewer" style="z-index:12000;background:rgba(0,0,0,.92)" onclick="if(event.target===this)closeModal('photoViewer')">
+  <div style="max-width:95vw;max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:10px">
+    <img id="photoViewerImg" alt="Foto do pacote em 720p" style="max-width:95vw;max-height:82vh;object-fit:contain;border-radius:10px;background:#111">
+    <button class="fbtn prim" onclick="closeModal('photoViewer')">Fechar imagem</button>
+  </div>
+</div>
 
 <script>
 /* ===================================================================
@@ -1075,6 +1107,7 @@ input,select,textarea{-webkit-appearance:none}
 var SESSION_KEY  = 'ses3_auth';
 var SESSION_KEY2 = 'ses3_key';
 var API_TOKEN_KEY = 'ses3_api_token';
+var SESSION_USER_KEY = 'ses3_user';
 var API_BASE = 'https://recebimento-lm-ses3-api.gabrielspo-spoladori.workers.dev';
 
 /* ---- XOR cipher: data.json fica criptografado, ilegivel sem a senha ---- */
@@ -1103,24 +1136,25 @@ function simpleHash(str) {
 }
 
 function doLogin() {
+  var username = (document.getElementById('login-user') || {}).value || '';
   var pwd = (document.getElementById('login-pwd') || {}).value || '';
   var err = document.getElementById('login-error');
-  if (!pwd.trim()) { if (err) err.textContent = 'Digite a senha.'; return; }
+  if (!username.trim() || !pwd.trim()) { if (err) err.textContent = 'Digite o usuário e a senha.'; return; }
   if (err) err.textContent = 'Verificando...';
 
   fetch(API_BASE + '/api/session', {
     method: 'POST',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pwd })
+    body: JSON.stringify({ username: username, password: pwd })
   }).then(function(response) {
     if (!response.ok) throw new Error(response.status === 401 ? 'Senha incorreta.' : 'Erro de conexao.');
     return response.json();
   }).then(function(result) {
     if (!result.token) throw new Error('Sessao invalida.');
     sessionStorage.setItem(SESSION_KEY, '1');
-    sessionStorage.setItem(SESSION_KEY2, pwd);
     sessionStorage.setItem(API_TOKEN_KEY, result.token);
+    sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(result.user));
     var screen = document.getElementById('login-screen');
     if (screen) screen.style.display = 'none';
     if (err) err.textContent = '';
@@ -1135,7 +1169,7 @@ function doLogin() {
 function checkAuth() {
   if (sessionStorage.getItem(SESSION_KEY) === '1') {
     /* se a chave de criptografia sumiu (ex: aba nova), forca re-login */
-    if (!sessionStorage.getItem(SESSION_KEY2) || !sessionStorage.getItem(API_TOKEN_KEY)) {
+    if (!sessionStorage.getItem(SESSION_USER_KEY) || !sessionStorage.getItem(API_TOKEN_KEY)) {
       sessionStorage.removeItem(SESSION_KEY);
       var inp2 = document.getElementById('login-pwd');
       if (inp2) setTimeout(function(){inp2.focus();}, 100);
@@ -1148,6 +1182,39 @@ function checkAuth() {
   var inp = document.getElementById('login-pwd');
   if (inp) setTimeout(function(){inp.focus();}, 100);
   return false;
+}
+
+function currentUser() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_USER_KEY) || 'null'); } catch(e) { return null; }
+}
+
+function isAdmin() {
+  var user = currentUser();
+  return !!user && user.role === 'admin';
+}
+
+function openRegister() {
+  document.getElementById('reg-name').value = '';
+  document.getElementById('reg-user').value = '';
+  document.getElementById('reg-pwd').value = '';
+  document.getElementById('reg-status').textContent = '';
+  openModal('registerModal');
+}
+
+function createAccount() {
+  var displayName = document.getElementById('reg-name').value.trim();
+  var username = document.getElementById('reg-user').value.trim();
+  var password = document.getElementById('reg-pwd').value;
+  var status = document.getElementById('reg-status');
+  status.textContent = 'Criando conta...';
+  fetch(API_BASE + '/api/register', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: displayName, username: username, password: password }) })
+    .then(function(response) { return response.json().then(function(body) { if (!response.ok) throw new Error(body.error || 'Não foi possível criar a conta'); return body; }); })
+    .then(function(result) {
+      document.getElementById('login-user').value = result.username;
+      closeModal('registerModal');
+      showToast('Conta criada. Entre com sua senha.', 's');
+      document.getElementById('login-pwd').focus();
+    }).catch(function(error) { status.textContent = error.message || 'Erro ao criar conta.'; });
 }
 
 /* ===================================================================
@@ -1483,13 +1550,11 @@ function showSaveError(msg) {
 var saveQueue = Promise.resolve();
 
 function saveGHAttempt(retryCount) {
-  var key = sessionStorage.getItem(SESSION_KEY2) || '';
-  if (!key) return Promise.reject(new Error('Sessao expirada. Entre novamente.'));
   return fetch(apiDataUrl(), { headers: apiHeaders(), cache: 'no-store' })
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
       var remoteFile = f.data;
-      var remoteData = remoteFile.enc ? JSON.parse(decryptData(remoteFile.enc, key)) : remoteFile;
+      var remoteData = remoteFile;
       if (Array.isArray(remoteData)) remoteData = { pkgs: remoteData };
       validateRemoteData(remoteData);
       pkgs = mergeRecordArrays(remoteData.pkgs || [], pkgs || []);
@@ -1508,8 +1573,7 @@ function saveGHAttempt(retryCount) {
         return copy;
       });
       var allData = { pkgs: pkgs, nexSessions: nexSessions, faltanteReg: faltanteReg, voandoReg: voandoStrip, deletedRecords: normalizeDeletedRecords(deletedRecords) };
-      var jsonStr = JSON.stringify(allData);
-      var fileObj = key ? { enc: encryptData(jsonStr, key) } : allData;
+      var fileObj = allData;
       return fetch(apiDataUrl(), {
         method: 'PUT',
         headers: apiHeaders(),
@@ -1586,12 +1650,16 @@ function appInit() {
   if (savedRecv === '—') savedRecv = '';
   if (savedDrv === '—') savedDrv = '';
   if (savedPlate === '—') savedPlate = '';
-  document.getElementById('defReceiver').value = savedRecv;
+  var signedUser = currentUser();
+  document.getElementById('defReceiver').value = signedUser ? signedUser.displayName : savedRecv;
   document.getElementById('defDriver').value   = savedDrv;
   document.getElementById('defPlate').value    = savedPlate;
   document.getElementById('defFacility').value = savedFacility;
   document.getElementById('defLocation').value = savedLocation;
   document.getElementById('defDate').value = savedDate;
+  var adminVisible = isAdmin();
+  document.getElementById('clearAllBtn').style.display = adminVisible ? '' : 'none';
+  document.getElementById('nb-users').style.display = adminVisible ? '' : 'none';
 
   // Populate reason selects
   var apReason = document.getElementById('ap-reason');
@@ -1638,7 +1706,8 @@ window.addEventListener('DOMContentLoaded', function() {
    NAVIGATION
 =================================================================== */
 function nav(view) {
-  var views = ['grid', 'pending', 'alert', 'received', 'voando', 'faltante', 'analytics', 'nex', 'achados'];
+  if (view === 'users' && !isAdmin()) { showToast('Acesso exclusivo do administrador.', 'w'); return; }
+  var views = ['grid', 'pending', 'alert', 'received', 'voando', 'faltante', 'analytics', 'nex', 'achados', 'users'];
   views.forEach(function(v) {
     var el  = document.getElementById('view-' + v);
     var btn = document.getElementById('nl-' + v);
@@ -1662,6 +1731,7 @@ function nav(view) {
   if (view === 'analytics') { initCharts(); renderAnalytics(); }
   if (view === 'nex')       { initNex(); }
   if (view === 'achados')   { checkAchados(); }
+  if (view === 'users')     { loadUsers(); }
 }
 
 /* ===================================================================
@@ -1807,6 +1877,7 @@ function confirmDup() {
 }
 
 function execScan(id, tag) {
+  var actor = currentUser() || { username: 'DESCONHECIDO', displayName: 'Desconhecido' };
   var recv  = document.getElementById('defReceiver').value.trim() || '—';
   var drv   = document.getElementById('defDriver').value.trim()   || '—';
   var plate = document.getElementById('defPlate').value.trim().toUpperCase() || '—';
@@ -1843,6 +1914,8 @@ function execScan(id, tag) {
     location:    location,
     operationDate: operationDate,
     photo:       pendingPackagePhoto || (existing ? existing.photo : null),
+    submittedBy: actor.username,
+    submittedByName: actor.displayName,
     pendingDate: existing ? existing.pendingDate : now,
     receivedAt:  now,
     receiptCode: code,
@@ -2038,7 +2111,7 @@ function buildTable(tbodyId, list, mode) {
   if (list.length === 0) {
     var tr = document.createElement('tr');
     tr.className = 'empty-row';
-    var colspan = mode === 'received' ? 11 : mode === 'grid' ? 12 : mode === 'alert' ? 6 : 8;
+    var colspan = mode === 'received' ? 12 : mode === 'grid' ? 13 : mode === 'alert' ? 6 : 8;
     var td = document.createElement('td');
     td.colSpan = colspan;
     td.innerHTML = '<span class="empty-ico">📦</span><strong>Nenhum registro</strong><br><small>Bipe um pacote ou ajuste os filtros</small>';
@@ -2088,6 +2161,7 @@ function buildRow(p, mode) {
     tr.appendChild(td(p.plate || '—', 'mono'));
     tr.appendChild(td(p.driver   || '—', ''));
     tr.appendChild(td(p.receiver || '—', ''));
+    tr.appendChild(td(p.submittedByName || p.receiver || '—', ''));
     tr.appendChild(td(p.pendingDate || '—', 'small'));
     tr.appendChild(td(isPend ? '—' : (p.receivedAt || '—'), 'small'));
     tr.appendChild(tdStatus(p, isPend, hrs, isAlert));
@@ -2135,6 +2209,7 @@ function buildRow(p, mode) {
   tr.appendChild(td(p.plate  || '—', 'mono'));
   tr.appendChild(td(p.driver    || '—', ''));
   tr.appendChild(td(p.receiver  || '—', ''));
+  tr.appendChild(td(p.submittedByName || p.receiver || '—', ''));
   tr.appendChild(td(p.pendingDate || '—', 'small'));
   var tdR = document.createElement('td');
   tdR.textContent = p.receivedAt || '—';
@@ -2241,7 +2316,7 @@ function tdActions(p, isPend) {
   var st = p.status;
 
   // Receber (se pendente, voando ou faltante)
-  if (st === 'Pendente' || st === 'Pacote Voando' || st === 'Pacote Faltante') {
+  if (isAdmin() && (st === 'Pendente' || st === 'Pacote Voando' || st === 'Pacote Faltante')) {
     var btnOk = document.createElement('button');
     btnOk.className = 'abtn g';
     btnOk.textContent = '✅';
@@ -2251,7 +2326,7 @@ function tdActions(p, isPend) {
   }
 
   // Marcar Voando (se pendente ou faltante)
-  if (st === 'Pendente' || st === 'Pacote Faltante') {
+  if (isAdmin() && (st === 'Pendente' || st === 'Pacote Faltante')) {
     var btnV = document.createElement('button');
     btnV.className = 'abtn';
     btnV.style.color = '#1d4ed8';
@@ -2263,7 +2338,7 @@ function tdActions(p, isPend) {
   }
 
   // Marcar Faltante (se pendente ou voando)
-  if (st === 'Pendente' || st === 'Pacote Voando') {
+  if (isAdmin() && (st === 'Pendente' || st === 'Pacote Voando')) {
     var btnF = document.createElement('button');
     btnF.className = 'abtn';
     btnF.style.color = '#374151';
@@ -2275,7 +2350,7 @@ function tdActions(p, isPend) {
   }
 
   // Reverter (se recebido/voando/faltante)
-  if (st !== 'Pendente') {
+  if (st !== 'Pendente' && isAdmin()) {
     var btnUndo = document.createElement('button');
     btnUndo.className = 'abtn';
     btnUndo.textContent = '↩️';
@@ -2285,12 +2360,14 @@ function tdActions(p, isPend) {
   }
 
   // Excluir
-  var btnDel = document.createElement('button');
-  btnDel.className = 'abtn r';
-  btnDel.textContent = '🗑';
-  btnDel.title = 'Excluir';
-  btnDel.addEventListener('click', function() { reqDelete(p.id); });
-  wrap.appendChild(btnDel);
+  if (isAdmin()) {
+    var btnDel = document.createElement('button');
+    btnDel.className = 'abtn r';
+    btnDel.textContent = '🗑';
+    btnDel.title = 'Excluir';
+    btnDel.addEventListener('click', function() { reqDelete(p.id); });
+    wrap.appendChild(btnDel);
+  }
 
   el.appendChild(wrap);
   return el;
@@ -2300,6 +2377,7 @@ function tdActions(p, isPend) {
    ACTIONS
 =================================================================== */
 function updateReason(id, reason) {
+  if (!isAdmin()) { showToast('Somente o administrador pode alterar registros.', 'w'); renderAll(); return; }
   for (var i = 0; i < pkgs.length; i++) {
     if (String(pkgs[i].id) === String(id)) { pkgs[i].reason = reason; pkgs[i].updatedAt = new Date().toISOString(); break; }
   }
@@ -2307,6 +2385,7 @@ function updateReason(id, reason) {
 }
 
 function confirmReceive(id) {
+  if (!isAdmin()) { showToast('Acesso exclusivo do administrador.', 'w'); return; }
   for (var i = 0; i < pkgs.length; i++) {
     if (String(pkgs[i].id) === String(id)) {
       pkgs[i].status     = 'Recebido';
@@ -2324,6 +2403,7 @@ function confirmReceive(id) {
 }
 
 function setStatus(id, newStatus) {
+  if (!isAdmin()) { showToast('Acesso exclusivo do administrador.', 'w'); return; }
   var labels = { 'Pacote Voando': '✈️ Voando', 'Pacote Faltante': '❓ Faltante' };
   for (var i = 0; i < pkgs.length; i++) {
     if (String(pkgs[i].id) === String(id)) {
@@ -2356,6 +2436,7 @@ function resetReceive(id) {
 }
 
 function reqDelete(id) {
+  if (!isAdmin()) { showToast('Acesso exclusivo do administrador.', 'w'); return; }
   pendingAction = { type: 'delete', id: id };
   document.getElementById('pwdIn').value = '';
   openModal('pwdModal');
@@ -2363,6 +2444,7 @@ function reqDelete(id) {
 }
 
 function reqClear() {
+  if (!isAdmin()) { showToast('Acesso exclusivo do administrador.', 'w'); return; }
   pendingAction = { type: 'clear' };
   document.getElementById('pwdIn').value = '';
   openModal('pwdModal');
@@ -2370,6 +2452,7 @@ function reqClear() {
 }
 
 function reqReset(id) {
+  if (!isAdmin()) { showToast('Acesso exclusivo do administrador.', 'w'); return; }
   pendingAction = { type: 'reset', id: id };
   document.getElementById('pwdIn').value = '';
   openModal('pwdModal');
@@ -2434,6 +2517,7 @@ function openReceipt(id) {
   setText('rc-facility', p.facility || '—');
   setText('rc-location', p.location || '—');
   setText('rc-operation-date', p.operationDate || '—');
+  setText('rc-submitted-by', p.submittedByName || p.receiver || '—');
   setText('rc-cnt',      linked.length);
 
   var pkgList = document.getElementById('rc-pkgs');
@@ -2456,7 +2540,7 @@ function openReceipt(id) {
       photo.src = q.photo;
       photo.alt = 'Foto do pacote ' + q.id;
       photo.style.cssText = 'width:42px;height:42px;object-fit:cover;border-radius:5px;margin-left:8px;cursor:pointer';
-      photo.onclick = function() { window.open(this.src, '_blank'); };
+      photo.onclick = function() { openPhoto(this.src); };
       li.appendChild(photo);
     }
     pkgList.appendChild(li);
@@ -2504,6 +2588,7 @@ function openAddPending() {
 }
 
 function saveAddPending() {
+  var actor = currentUser() || { username: 'DESCONHECIDO', displayName: 'Desconhecido' };
   var id    = document.getElementById('ap-id').value.trim();
   var dt    = document.getElementById('ap-date').value;
   var drv   = document.getElementById('ap-driver').value.trim() || '—';
@@ -2533,6 +2618,8 @@ function saveAddPending() {
     facility:    document.getElementById('defFacility').value || 'XPT',
     location:    document.getElementById('defLocation').value || 'EES3 - SÃO MATEUS',
     operationDate: document.getElementById('defDate').value || todayInputValue(),
+    submittedBy: actor.username,
+    submittedByName: actor.displayName,
     pendingDate: fmtDate,
     receivedAt:  '—',
     receiptCode: '',
@@ -2829,7 +2916,7 @@ function todayInputValue() {
 function verifyPwd() {
   var password = document.getElementById('pwdIn').value;
   fetch(API_BASE + '/api/admin-session', {
-    method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', cache: 'no-store', headers: apiHeaders(),
     body: JSON.stringify({ password: password })
   }).then(function(response) {
     if (!response.ok) throw new Error('Senha incorreta');
@@ -2843,32 +2930,61 @@ function verifyPwd() {
   });
 }
 
+function loadUsers() {
+  if (!isAdmin()) return;
+  var tbody = document.getElementById('usersBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
+  fetch(API_BASE + '/api/users', { headers: apiHeaders(), cache: 'no-store' })
+    .then(function(response) { if (!response.ok) throw new Error('Acesso negado'); return response.json(); })
+    .then(function(result) {
+      tbody.innerHTML = '';
+      (result.users || []).forEach(function(user) {
+        var tr = document.createElement('tr');
+        tr.appendChild(td(user.displayName || '—', ''));
+        tr.appendChild(td(user.username || '—', 'mono'));
+        tr.appendChild(td(user.role === 'admin' ? 'Administrador' : 'Operador', ''));
+        tr.appendChild(td(user.createdAt ? new Date(user.createdAt).toLocaleString('pt-BR') : 'Conta principal', 'small'));
+        tr.appendChild(td(user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('pt-BR') : '—', 'small'));
+        tbody.appendChild(tr);
+      });
+    }).catch(function(error) { tbody.innerHTML = '<tr><td colspan="5">' + error.message + '</td></tr>'; });
+}
+
 function compactPhotoFile(file, done) {
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = new Image();
     img.onload = function() {
-      var maxDim = 240, w = img.width, h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      var maxW = 1280, maxH = 720, w = img.width, h = img.height;
+      var scale = Math.min(1, maxW / w, maxH / h);
+      if (scale < 1) {
+        w = Math.round(w * scale); h = Math.round(h * scale);
       }
       var canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      done(canvas.toDataURL('image/jpeg', 0.28));
+      done(canvas.toDataURL('image/jpeg', 0.74));
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
+function uploadPhotoData(dataUrl) {
+  return fetch(dataUrl).then(function(response) { return response.blob(); }).then(function(blob) {
+    return fetch(API_BASE + '/api/photos', { method: 'POST', headers: { Authorization: 'Bearer ' + sessionStorage.getItem(API_TOKEN_KEY), 'Content-Type': 'image/jpeg' }, body: blob });
+  }).then(function(response) {
+    return response.json().then(function(body) { if (!response.ok) throw new Error(body.error || 'Erro ao enviar foto'); return body.url; });
+  });
+}
+
 function previewPackagePhoto(input) {
   if (!input.files || !input.files[0]) return;
   compactPhotoFile(input.files[0], function(data) {
-    pendingPackagePhoto = data;
     document.getElementById('sd-photo-img').src = data;
     document.getElementById('sd-photo-preview').style.display = 'block';
+    uploadPhotoData(data).then(function(url) { pendingPackagePhoto = url; }).catch(function(error) { document.getElementById('sd-status').textContent = error.message; });
   });
 }
 
@@ -2910,6 +3026,12 @@ function createPackageBarcodeReader() {
   ]);
   hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
   return new ZXing.BrowserMultiFormatReader(hints, 250);
+}
+
+function openPhoto(url) {
+  if (!url) return;
+  document.getElementById('photoViewerImg').src = url;
+  openModal('photoViewer');
 }
 
 function camStatus(msg, cls) {
@@ -3102,12 +3224,16 @@ var nexPendingPhoto = null;
 function previewNexPhoto(input) {
   if (!input.files || !input.files[0]) return;
   var file = input.files[0];
+  nexPendingPhoto = null;
   var info = document.getElementById('nex-photo-info');
   if (info) { info.textContent = 'Lendo código de barras...'; info.style.color = '#6B7280'; }
   compactPhotoFile(file, function(data) {
-    nexPendingPhoto = data;
     document.getElementById('nex-photo-img').src = data;
     document.getElementById('nex-photo-preview').style.display = 'flex';
+    uploadPhotoData(data).then(function(url) {
+      nexPendingPhoto = url;
+      if (info && info.textContent.indexOf('Código identificado:') !== 0) { info.textContent = 'Foto 720p enviada. Digite o ID se necessário.'; info.style.color = '#065f46'; }
+    }).catch(function(error) { if (info) { info.textContent = error.message; info.style.color = '#e53935'; } });
   });
   decodeNexBarcodeFromPhoto(file);
 }
@@ -3221,6 +3347,7 @@ function addNexPackage() {
       agency: agency,
       packages: [],
       photos: {},
+      actors: {},
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -3248,6 +3375,9 @@ function addNexPackage() {
   nexActiveSession.packages.push(pkgId);
   nexActiveSession.photos = nexActiveSession.photos || {};
   if (nexPendingPhoto) nexActiveSession.photos[pkgId] = nexPendingPhoto;
+  nexActiveSession.actors = nexActiveSession.actors || {};
+  var nexActor = currentUser();
+  if (nexActor) nexActiveSession.actors[pkgId] = { username: nexActor.username, displayName: nexActor.displayName };
   nexActiveSession.updatedAt = new Date().toISOString();
   persistNex();
 
@@ -3299,15 +3429,16 @@ function renderNexCurrent() {
       photo.src = nexActiveSession.photos[pkgId];
       photo.alt = 'Foto ' + pkgId;
       photo.style.cssText = 'width:34px;height:34px;object-fit:cover;border-radius:5px;cursor:pointer';
-      photo.onclick = function() { window.open(this.src, '_blank'); };
+      photo.onclick = function() { openPhoto(this.src); };
       tag.appendChild(photo);
     }
-    tag.appendChild(del);
+    if (isAdmin()) tag.appendChild(del);
     listEl.appendChild(tag);
   }
 }
 
 function removeNexPackage(idx) {
+  if (!isAdmin()) { showToast('Somente o administrador pode excluir registros.', 'w'); return; }
   if (!nexActiveSession) return;
   var sessionId = nexActiveSession.id;
   var removedId = nexActiveSession.packages[idx];
@@ -3325,6 +3456,7 @@ function removeNexPackage(idx) {
 }
 
 function clearNexSession() {
+  if (!isAdmin()) { showToast('Somente o administrador pode limpar a sessão.', 'w'); return; }
   if (!nexActiveSession) return;
   markRecordDeleted('nexSessions', nexActiveSession.id);
   nexSessions = nexSessions.filter(function(s) { return s.id !== nexActiveSession.id; });
@@ -3385,6 +3517,7 @@ function renderNexHistory() {
     delBtn.textContent = 'Del';
     (function(sid) {
       delBtn.onclick = function() {
+        if (!isAdmin()) { showToast('Somente o administrador pode excluir registros.', 'w'); return; }
         markRecordDeleted('nexSessions', sid);
         nexSessions = nexSessions.filter(function(x) { return x.id !== sid; });
         if (nexActiveSession && nexActiveSession.id === sid) nexActiveSession = null;
@@ -3393,7 +3526,7 @@ function renderNexHistory() {
         renderNexHistory();
       };
     })(s.id);
-    tdAct.appendChild(delBtn);
+    if (isAdmin()) tdAct.appendChild(delBtn);
 
     tr.appendChild(tdDate);
     tr.appendChild(tdAgency);

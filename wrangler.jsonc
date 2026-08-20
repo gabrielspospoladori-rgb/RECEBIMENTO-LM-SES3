@@ -25,5 +25,11 @@
 			"database_name": "recebimento-lm-ses3",
 			"database_id": "e5f470fb-35d4-4f60-bffa-397cecee8484"
 		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "PHOTOS",
+			"bucket_name": "recebimento-lm-ses3-photos"
+		}
 	]
 }
