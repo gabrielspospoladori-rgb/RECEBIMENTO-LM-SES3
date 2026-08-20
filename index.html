@@ -468,7 +468,7 @@ input,select,textarea{-webkit-appearance:none}
     <input type="text" id="defPlate"    class="meta-inp short" placeholder="Placa">
     <select id="defFacility" class="meta-inp facility" title="Facility"><option>XPT</option><option>SVC</option><option>NEX</option></select>
     <select id="defLocation" class="meta-inp location" title="Local">
-      <option value="EES3 - SÃO MATEUS">EES3 - SÃO MATEUS</option><option value="EES2 - COLATINA">EES2 - COLATINA</option>
+      <option value="EES3 - SÃO MATEUS">EES3 - SÃO MATEUS</option><option value="SVC SES3">SVC SES3</option><option value="EES2 - COLATINA">EES2 - COLATINA</option>
       <option value="EES6 - BARRA DE SÃO FRANCISCO">EES6 - BARRA DE SÃO FRANCISCO</option><option value="EBA32 - BAHIA">EBA32 - BAHIA</option>
       <option value="BRNES464 - AVISO">BRNES464 - AVISO</option><option value="BRNES124 - GAIVOTAS">BRNES124 - GAIVOTAS</option>
       <option value="BRNES73 - SOORETAMA">BRNES73 - SOORETAMA</option>
@@ -1043,7 +1043,7 @@ input,select,textarea{-webkit-appearance:none}
     <div class="mfield"><label>Placa do veículo *</label><input id="sd-plate" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase" autocomplete="off"></div>
     <div class="mfield"><label>Facility *</label><select id="sd-facility"><option>XPT</option><option>SVC</option><option>NEX</option></select></div>
     <div class="mfield"><label>Local *</label><select id="sd-location">
-      <option value="EES3 - SÃO MATEUS">EES3 - SÃO MATEUS</option><option value="EES2 - COLATINA">EES2 - COLATINA</option>
+      <option value="EES3 - SÃO MATEUS">EES3 - SÃO MATEUS</option><option value="SVC SES3">SVC SES3</option><option value="EES2 - COLATINA">EES2 - COLATINA</option>
       <option value="EES6 - BARRA DE SÃO FRANCISCO">EES6 - BARRA DE SÃO FRANCISCO</option><option value="EBA32 - BAHIA">EBA32 - BAHIA</option>
       <option value="BRNES464 - AVISO">BRNES464 - AVISO</option><option value="BRNES124 - GAIVOTAS">BRNES124 - GAIVOTAS</option><option value="BRNES73 - SOORETAMA">BRNES73 - SOORETAMA</option>
     </select></div>
@@ -3811,7 +3811,7 @@ function renderNexHistory() {
 /* ===================================================================
    FACILITY OPTIONS & SELECTORS
 =================================================================== */
-var FACILITY_OPTIONS = { XPT: ['EBA32','EES3','EES2','EES6'], SVC: ['HAWK SVC','ON TIME SVC','DELUNA SVC','PARCEIRO SPOT SVC'], BRNES: ['BRNES464 AVISO','BRNES73 SOORETAMA','BRNES124 GAIVOTAS'] };
+var FACILITY_OPTIONS = { XPT: ['EBA32','EES3','EES2','EES6'], SVC: ['SVC SES3','HAWK SVC','ON TIME SVC','DELUNA SVC','PARCEIRO SPOT SVC'], BRNES: ['BRNES464 AVISO','BRNES73 SOORETAMA','BRNES124 GAIVOTAS'] };
 
 function updateFacSub(prefix) {
   var typeEl = document.getElementById(prefix + 'FacType');
