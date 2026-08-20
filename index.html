@@ -885,6 +885,22 @@ input,select,textarea{-webkit-appearance:none}
   </main>
 </div>
 
+<button id="supportChatBtn" onclick="openSupportChat()" title="Ajuda e comunicação com o administrador" style="position:fixed;right:18px;bottom:22px;z-index:450;background:#3483FA;color:#fff;border:none;border-radius:24px;padding:11px 17px;font-weight:900;box-shadow:0 5px 18px rgba(52,131,250,.35);cursor:pointer">💬 Ajuda</button>
+
+<!-- MODAL: Comprovante -->
+<div class="overlay" id="supportChatModal" style="z-index:13000">
+  <div class="modal" style="max-width:620px;width:100%">
+    <div class="mhd">💬 Chat privado de suporte</div>
+    <div id="supportChatInfo" style="font-size:.72rem;color:#6B7280;margin-bottom:10px"></div>
+    <div id="supportMessages" style="height:min(52vh,430px);overflow-y:auto;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:10px"></div>
+    <div id="supportComposer" style="display:flex;gap:8px;margin-top:10px">
+      <textarea id="supportMessageInput" maxlength="2000" placeholder="Descreva a dificuldade ou o erro..." style="flex:1;min-height:70px;resize:vertical;border:1px solid #D1D5DB;border-radius:8px;padding:10px;font-family:inherit"></textarea>
+      <button class="fbtn prim" onclick="sendSupportMessage()">Enviar</button>
+    </div>
+    <div class="mft"><button class="fbtn" onclick="closeModal('supportChatModal')">Fechar</button><button class="fbtn" onclick="loadSupportMessages()">Atualizar</button></div>
+  </div>
+</div>
+
 <!-- MODAL: Comprovante -->
 <div class="overlay" id="rcModal">
   <div class="modal" style="max-width:520px" id="rcModalInner">
@@ -3096,6 +3112,65 @@ function loadUsers() {
         tbody.appendChild(tr);
       });
     }).catch(function(error) { tbody.innerHTML = '<tr><td colspan="7">' + error.message + '</td></tr>'; });
+}
+
+function openSupportChat() {
+  var user = currentUser();
+  if (!user) { showToast('Entre no sistema para usar o suporte.', 'w'); return; }
+  document.getElementById('supportChatInfo').textContent = isAdmin() ? 'Visão administrativa: todas as conversas privadas.' : 'Esta conversa é privada. Somente você e os administradores podem visualizá-la.';
+  document.getElementById('supportComposer').style.display = isAdmin() ? 'none' : 'flex';
+  openModal('supportChatModal');
+  loadSupportMessages();
+}
+
+function loadSupportMessages() {
+  var box = document.getElementById('supportMessages');
+  box.innerHTML = '<div style="text-align:center;color:#9CA3AF;padding:20px">Carregando...</div>';
+  fetchWithRetry(API_BASE + '/api/support', { headers: apiHeaders(), cache: 'no-store' }, 1)
+    .then(function(response) { return response.json().then(function(body) { if (!response.ok) throw new Error(body.error || 'Erro ao carregar o chat'); return body; }); })
+    .then(function(result) { renderSupportMessages(result.messages || []); })
+    .catch(function(error) { box.innerHTML = '<div style="color:#dc2626;padding:16px">' + error.message + '</div>'; });
+}
+
+function renderSupportMessages(messages) {
+  var box = document.getElementById('supportMessages'); box.innerHTML = '';
+  if (!messages.length) { box.innerHTML = '<div style="text-align:center;color:#9CA3AF;padding:28px">Nenhuma mensagem ainda.</div>'; return; }
+  var lastThread = '';
+  messages.forEach(function(message) {
+    if (isAdmin() && message.thread_username !== lastThread) {
+      var divider = document.createElement('div'); divider.style.cssText = 'font-size:.72rem;font-weight:900;color:#1D4ED8;border-bottom:1px solid #BFDBFE;margin:12px 0 7px;padding-bottom:4px';
+      divider.textContent = 'Conversa: ' + message.thread_username; box.appendChild(divider); lastThread = message.thread_username;
+    }
+    var own = message.sender_username === (currentUser() || {}).username;
+    var card = document.createElement('div'); card.style.cssText = 'margin:6px 0;padding:9px 11px;border-radius:10px;max-width:88%;background:' + (own ? '#DBEAFE' : '#fff') + ';border:1px solid ' + (own ? '#93C5FD' : '#E5E7EB') + ';margin-left:' + (own ? 'auto' : '0');
+    var meta = document.createElement('div'); meta.style.cssText = 'font-size:.62rem;font-weight:800;color:#6B7280;margin-bottom:4px';
+    meta.textContent = message.sender_display_name + (message.sender_job_title ? ' · ' + message.sender_job_title : '') + ' · ' + new Date(message.created_at).toLocaleString('pt-BR');
+    var text = document.createElement('div'); text.style.cssText = 'font-size:.8rem;white-space:pre-wrap;word-break:break-word'; text.textContent = message.message;
+    card.appendChild(meta); card.appendChild(text);
+    if (isAdmin() && message.sender_role !== 'admin') {
+      var reply = document.createElement('button'); reply.className = 'fbtn'; reply.style.cssText = 'margin-top:7px;font-size:.65rem'; reply.textContent = '↩ Responder';
+      reply.onclick = function() { replySupportMessage(message.thread_username); }; card.appendChild(reply);
+    }
+    box.appendChild(card);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+function postSupportMessage(message, threadUsername) {
+  return fetchWithRetry(API_BASE + '/api/support', { method: 'POST', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify({ message: message, threadUsername: threadUsername || '' }) }, 1)
+    .then(function(response) { return response.json().then(function(body) { if (!response.ok) throw new Error(body.error || 'Erro ao enviar mensagem'); return body; }); });
+}
+
+function sendSupportMessage() {
+  var input = document.getElementById('supportMessageInput'), message = input.value.trim();
+  if (message.length < 2) { showToast('Escreva a mensagem antes de enviar.', 'w'); return; }
+  postSupportMessage(message).then(function() { input.value = ''; showToast('Mensagem enviada ao administrador.', 's'); loadSupportMessages(); }).catch(function(error) { showToast(error.message, 'd'); });
+}
+
+function replySupportMessage(threadUsername) {
+  var message = window.prompt('Digite a resposta para ' + threadUsername + ':');
+  if (message === null || message.trim().length < 2) return;
+  postSupportMessage(message.trim(), threadUsername).then(function() { showToast('Resposta enviada.', 's'); loadSupportMessages(); }).catch(function(error) { showToast(error.message, 'd'); });
 }
 
 function updateUserAccount(username, payload, successMessage) {

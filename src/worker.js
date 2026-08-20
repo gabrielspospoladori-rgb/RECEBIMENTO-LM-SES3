@@ -215,6 +215,34 @@ async function handleUsers(request, env, session) {
   return jsonResponse(request, { users: users });
 }
 
+async function handleSupportGet(request, env, session) {
+  var query;
+  if (session.role === "admin") {
+    query = await env.DB.prepare("SELECT id, thread_username, sender_username, sender_display_name, sender_job_title, sender_role, message, created_at FROM support_messages ORDER BY created_at ASC LIMIT 500").all();
+    await env.DB.prepare("UPDATE support_messages SET read_by_admin = 1 WHERE read_by_admin = 0").run();
+  } else {
+    query = await env.DB.prepare("SELECT id, thread_username, sender_username, sender_display_name, sender_job_title, sender_role, message, created_at FROM support_messages WHERE thread_username = ?1 COLLATE NOCASE ORDER BY created_at ASC LIMIT 200").bind(session.username).all();
+  }
+  return jsonResponse(request, { messages: query.results || [] });
+}
+
+async function handleSupportPost(request, env, session) {
+  var body = await readJson(request);
+  var message = String(body && body.message || "").trim();
+  if (message.length < 2 || message.length > 2000) return jsonResponse(request, { error: "Mensagem deve ter entre 2 e 2000 caracteres" }, 400);
+  var threadUsername = session.role === "admin" ? normalizeUsername(body.threadUsername) : session.username;
+  if (!threadUsername) return jsonResponse(request, { error: "Selecione a conversa" }, 400);
+  if (session.role === "admin" && threadUsername !== "MELI") {
+    var target = await env.DB.prepare("SELECT username FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(threadUsername).first();
+    if (!target) return jsonResponse(request, { error: "Usuario da conversa nao encontrado" }, 404);
+  }
+  var now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO support_messages (id, thread_username, sender_username, sender_display_name, sender_job_title, sender_role, message, created_at, read_by_admin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
+    .bind(crypto.randomUUID(), threadUsername, session.username, session.displayName, session.jobTitle || "", session.role, message, now, session.role === "admin" ? 1 : 0).run();
+  await audit(env, session, session.role === "admin" ? "respondeu_suporte:" + threadUsername : "abriu_suporte");
+  return jsonResponse(request, { ok: true, createdAt: now }, 201);
+}
+
 async function handleUserAdminUpdate(request, env, session, username) {
   if (!session || session.role !== "admin") return jsonResponse(request, { error: "Acesso exclusivo do administrador" }, 403);
   username = normalizeUsername(username);
@@ -462,6 +490,12 @@ export default {
       if (request.method === "PATCH" && url.pathname.indexOf("/api/users/") === 0) {
         var userAdminSession = await requireAdmin(request, env);
         return await handleUserAdminUpdate(request, env, userAdminSession, decodeURIComponent(url.pathname.slice(11)));
+      }
+      if (url.pathname === "/api/support") {
+        var supportSession = await requireSession(request, env);
+        if (!supportSession) return jsonResponse(request, { error: "Sessao invalida ou expirada" }, 401);
+        if (request.method === "GET") return await handleSupportGet(request, env, supportSession);
+        if (request.method === "POST") return await handleSupportPost(request, env, supportSession);
       }
       if (request.method === "POST" && url.pathname === "/api/photos") {
         var photoSession = await requireSession(request, env);
