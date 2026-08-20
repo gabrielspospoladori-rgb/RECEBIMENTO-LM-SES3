@@ -134,6 +134,15 @@ async function handleSession(request, env) {
   return jsonResponse(request, { token: token, expiresIn: SESSION_DURATION_MS / 1000 });
 }
 
+async function handleAdminSession(request, env) {
+  var body = await readJson(request);
+  if (!body || typeof body.password !== "string") return jsonResponse(request, { error: "Senha obrigatoria" }, 400);
+  var valid = await sameSecret(body.password, env.ADMIN_PASSWORD);
+  if (!valid) return jsonResponse(request, { error: "Senha administrativa incorreta" }, 401);
+  var token = await createSessionToken(env.SESSION_SECRET);
+  return jsonResponse(request, { token: token, expiresIn: 300 });
+}
+
 async function handleGetData(request, env) {
   var row = await readState(env);
   if (!row) return jsonResponse(request, { error: "Banco ainda nao inicializado" }, 503);
@@ -173,6 +182,7 @@ export default {
         return jsonResponse(request, { ok: true, service: "recebimento-lm-ses3" });
       }
       if (request.method === "POST" && url.pathname === "/api/session") return await handleSession(request, env);
+      if (request.method === "POST" && url.pathname === "/api/admin-session") return await handleAdminSession(request, env);
       if (url.pathname === "/api/data") {
         if (!(await requireSession(request, env))) return jsonResponse(request, { error: "Sessao invalida ou expirada" }, 401);
         if (request.method === "GET") return await handleGetData(request, env);

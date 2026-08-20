@@ -39,6 +39,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 }
 .meta-inp:focus{outline:none;border-color:#1C1C1E;background:#fff}
 .meta-inp.short{width:85px;text-transform:uppercase}
+.meta-inp.facility{width:78px;font-weight:800}
+.meta-inp.location{width:150px;font-weight:700}
 .scan-btn{
   background:#1C1C1E;color:#FFE600;border:none;border-radius:7px;padding:6px 14px;
   font-size:0.8rem;font-weight:900;cursor:pointer;white-space:nowrap;font-family:inherit;
@@ -447,6 +449,14 @@ input,select,textarea{-webkit-appearance:none}
     <input type="text" id="defReceiver" class="meta-inp" placeholder="Triador">
     <input type="text" id="defDriver"   class="meta-inp" placeholder="Motorista">
     <input type="text" id="defPlate"    class="meta-inp short" placeholder="Placa">
+    <select id="defFacility" class="meta-inp facility" title="Facility"><option>XPT</option><option>SVC</option><option>NEX</option></select>
+    <select id="defLocation" class="meta-inp location" title="Local">
+      <option value="EES3 - SÃO MATEUS">EES3 - SÃO MATEUS</option><option value="EES2 - COLATINA">EES2 - COLATINA</option>
+      <option value="EES6 - BARRA DE SÃO FRANCISCO">EES6 - BARRA DE SÃO FRANCISCO</option><option value="EBA32 - BAHIA">EBA32 - BAHIA</option>
+      <option value="BRNES464 - AVISO">BRNES464 - AVISO</option><option value="BRNES124 - GAIVOTAS">BRNES124 - GAIVOTAS</option>
+      <option value="BRNES73 - SOORETAMA">BRNES73 - SOORETAMA</option>
+    </select>
+    <input type="date" id="defDate" class="meta-inp" title="Data do registro" style="width:125px;font-weight:700">
     <button class="scan-btn" id="scanBtn" onclick="triggerScan()">⚡ Bipar</button>
     <button class="cam-btn" id="cam-btn" onclick="openCamera()" title="Abrir câmera para bipar">📷 Câmera</button>
     <span id="scanFb" class="scan-fb"></span>
@@ -539,7 +549,7 @@ input,select,textarea{-webkit-appearance:none}
         </div>
         <div style="overflow-x:auto"><table class="dt">
           <thead><tr>
-            <th>ID do Pacote</th><th>Motivo</th><th>Placa</th><th>Motorista</th>
+            <th>ID do Pacote</th><th>Data</th><th>Facility</th><th>Local</th><th>Motivo</th><th>Placa</th><th>Motorista</th>
             <th>Triador</th><th>Desde</th><th>Recebido Em</th>
             <th class="center">Status</th><th class="right">Ações</th>
           </tr></thead>
@@ -612,7 +622,7 @@ input,select,textarea{-webkit-appearance:none}
         </div>
         <div style="overflow-x:auto"><table class="dt">
           <thead><tr>
-            <th>ID do Pacote</th><th>Comprovante</th><th>Motivo</th><th>Placa</th>
+            <th>ID do Pacote</th><th>Data</th><th>Facility</th><th>Local</th><th>Comprovante</th><th>Motivo</th><th>Placa</th>
             <th>Motorista</th><th>Triador</th><th>Desde</th><th>Recebido Em</th>
           </tr></thead>
           <tbody id="recBody"></tbody>
@@ -785,8 +795,11 @@ input,select,textarea{-webkit-appearance:none}
           <!-- Scan bar -->
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <input id="nexScanInput" type="text" placeholder="&#128230; Bipe ou digite o ID do pacote..." style="flex:1;min-width:180px;padding:9px 12px;border:2px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-weight:700;font-family:inherit" onkeydown="if(event.key==='Enter')addNexPackage()">
+            <label for="nexPhotoInput" style="background:#3483FA;color:#fff;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:900;cursor:pointer">📷 Foto do pacote</label>
+            <input id="nexPhotoInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="previewNexPhoto(this)">
             <button onclick="addNexPackage()" style="background:#1C1C1E;color:#FFE600;border:none;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:900;cursor:pointer;font-family:inherit">&#9889; Adicionar</button>
           </div>
+          <div id="nex-photo-preview" style="display:none;margin-top:8px;align-items:center;gap:8px"><img id="nex-photo-img" alt="Foto NEX" style="width:70px;height:55px;object-fit:cover;border-radius:6px;border:1px solid #E5E7EB"><span style="font-size:.7rem;color:#065f46;font-weight:700">Foto pronta para enviar</span></div>
           <!-- Active session info -->
           <div id="nex-session-info" style="margin-top:10px;font-size:0.75rem;color:#6B7280"></div>
         </div>
@@ -881,6 +894,18 @@ input,select,textarea{-webkit-appearance:none}
           <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Data / Hora do Recebimento</div>
           <div style="font-size:0.85rem;font-weight:800;color:#065f46" id="rc-time"></div>
         </div>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Facility</div>
+          <div style="font-size:0.95rem;font-weight:800;color:#1C1C1E" id="rc-facility"></div>
+        </div>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Local</div>
+          <div style="font-size:0.8rem;font-weight:800;color:#1C1C1E" id="rc-location"></div>
+        </div>
+        <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 12px;grid-column:1 / -1">
+          <div style="font-size:0.6rem;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Data do registro</div>
+          <div style="font-size:0.9rem;font-weight:800;color:#065f46" id="rc-operation-date"></div>
+        </div>
       </div>
 
       <!-- Lista de pacotes -->
@@ -968,6 +993,18 @@ input,select,textarea{-webkit-appearance:none}
     <div class="mfield"><label>Triador / Responsável *</label><input id="sd-receiver" placeholder="Nome do triador" autocomplete="name"></div>
     <div class="mfield"><label>Motorista *</label><input id="sd-driver" placeholder="Nome do motorista" autocomplete="name"></div>
     <div class="mfield"><label>Placa do veículo *</label><input id="sd-plate" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase" autocomplete="off"></div>
+    <div class="mfield"><label>Facility *</label><select id="sd-facility"><option>XPT</option><option>SVC</option><option>NEX</option></select></div>
+    <div class="mfield"><label>Local *</label><select id="sd-location">
+      <option value="EES3 - SÃO MATEUS">EES3 - SÃO MATEUS</option><option value="EES2 - COLATINA">EES2 - COLATINA</option>
+      <option value="EES6 - BARRA DE SÃO FRANCISCO">EES6 - BARRA DE SÃO FRANCISCO</option><option value="EBA32 - BAHIA">EBA32 - BAHIA</option>
+      <option value="BRNES464 - AVISO">BRNES464 - AVISO</option><option value="BRNES124 - GAIVOTAS">BRNES124 - GAIVOTAS</option><option value="BRNES73 - SOORETAMA">BRNES73 - SOORETAMA</option>
+    </select></div>
+    <div class="mfield"><label>Data *</label><input type="date" id="sd-date"></div>
+    <div class="mfield"><label>Foto do pacote</label>
+      <label for="sd-photo" class="fbtn" style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer">📷 Enviar foto do pacote</label>
+      <input type="file" id="sd-photo" accept="image/*" capture="environment" style="display:none" onchange="previewPackagePhoto(this)">
+      <div id="sd-photo-preview" style="display:none;margin-top:8px"><img id="sd-photo-img" alt="Foto do pacote" style="max-width:150px;max-height:110px;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB"></div>
+    </div>
     <div id="sd-status" style="min-height:18px;margin-top:4px;font-size:0.74rem;font-weight:700;color:#e53935"></div>
     <div class="mft">
       <button class="fbtn prim" onclick="confirmCameraScan()">✅ Confirmar e salvar</button>
@@ -1543,12 +1580,18 @@ function appInit() {
   var savedRecv  = localStorage.getItem('pkg_recv') || '';
   var savedDrv   = localStorage.getItem('pkg_drv')  || '';
   var savedPlate = localStorage.getItem('pkg_plt')  || '';
+  var savedFacility = localStorage.getItem('pkg_facility') || 'XPT';
+  var savedLocation = localStorage.getItem('pkg_location') || 'EES3 - SÃO MATEUS';
+  var savedDate = localStorage.getItem('pkg_date') || todayInputValue();
   if (savedRecv === '—') savedRecv = '';
   if (savedDrv === '—') savedDrv = '';
   if (savedPlate === '—') savedPlate = '';
   document.getElementById('defReceiver').value = savedRecv;
   document.getElementById('defDriver').value   = savedDrv;
   document.getElementById('defPlate').value    = savedPlate;
+  document.getElementById('defFacility').value = savedFacility;
+  document.getElementById('defLocation').value = savedLocation;
+  document.getElementById('defDate').value = savedDate;
 
   // Populate reason selects
   var apReason = document.getElementById('ap-reason');
@@ -1632,6 +1675,7 @@ function triggerScan() {
 }
 
 var pendingCameraRaw = null;
+var pendingPackagePhoto = null;
 
 function ensureWriteConfigured() {
   if (sessionStorage.getItem(API_TOKEN_KEY)) return true;
@@ -1659,11 +1703,20 @@ function openCameraScanDetails(raw) {
   var receiver = document.getElementById('defReceiver').value.trim();
   var driver = document.getElementById('defDriver').value.trim();
   var plate = document.getElementById('defPlate').value.trim();
+  var facility = document.getElementById('defFacility').value;
+  var location = document.getElementById('defLocation').value;
+  var operationDate = document.getElementById('defDate').value;
   var scannedId = normalizePackageId(pendingCameraRaw);
   document.getElementById('sd-package-id').value = scannedId;
   document.getElementById('sd-receiver').value = receiver === '—' ? '' : receiver;
   document.getElementById('sd-driver').value = driver === '—' ? '' : driver;
   document.getElementById('sd-plate').value = plate === '—' ? '' : plate;
+  document.getElementById('sd-facility').value = facility || 'XPT';
+  document.getElementById('sd-location').value = location || 'EES3 - SÃO MATEUS';
+  document.getElementById('sd-date').value = operationDate || todayInputValue();
+  pendingPackagePhoto = null;
+  document.getElementById('sd-photo').value = '';
+  document.getElementById('sd-photo-preview').style.display = 'none';
   document.getElementById('sd-status').textContent = '';
   openModal('scanDetailsModal');
   setTimeout(function() {
@@ -1678,8 +1731,11 @@ function confirmCameraScan() {
   var receiver = document.getElementById('sd-receiver').value.trim();
   var driver = document.getElementById('sd-driver').value.trim();
   var plate = document.getElementById('sd-plate').value.trim().toUpperCase();
+  var facility = document.getElementById('sd-facility').value;
+  var location = document.getElementById('sd-location').value;
+  var operationDate = document.getElementById('sd-date').value;
   var status = document.getElementById('sd-status');
-  if (!packageId) { status.textContent = 'Informe o ID do pacote.'; return; }
+  if (!packageId || !operationDate) { status.textContent = 'Informe o ID e a data.'; return; }
   if (!receiver || !driver || !plate) {
     status.textContent = 'Preencha Triador, Motorista e Placa para continuar.';
     return;
@@ -1691,6 +1747,9 @@ function confirmCameraScan() {
   document.getElementById('defReceiver').value = receiver;
   document.getElementById('defDriver').value = driver;
   document.getElementById('defPlate').value = plate;
+  document.getElementById('defFacility').value = facility;
+  document.getElementById('defLocation').value = location;
+  document.getElementById('defDate').value = operationDate;
   var raw = packageId;
   closeModal('scanDetailsModal');
   pendingCameraRaw = null;
@@ -1699,6 +1758,7 @@ function confirmCameraScan() {
 
 function cancelCameraScan() {
   pendingCameraRaw = null;
+  pendingPackagePhoto = null;
   closeModal('scanDetailsModal');
 }
 
@@ -1750,10 +1810,16 @@ function execScan(id, tag) {
   var recv  = document.getElementById('defReceiver').value.trim() || '—';
   var drv   = document.getElementById('defDriver').value.trim()   || '—';
   var plate = document.getElementById('defPlate').value.trim().toUpperCase() || '—';
+  var facility = document.getElementById('defFacility').value || 'XPT';
+  var location = document.getElementById('defLocation').value || 'EES3 - SÃO MATEUS';
+  var operationDate = document.getElementById('defDate').value || todayInputValue();
 
   localStorage.setItem('pkg_recv', recv);
   localStorage.setItem('pkg_drv',  drv);
   localStorage.setItem('pkg_plt',  plate);
+  localStorage.setItem('pkg_facility', facility);
+  localStorage.setItem('pkg_location', location);
+  localStorage.setItem('pkg_date', operationDate);
 
   var now = fmtNow();
 
@@ -1773,6 +1839,10 @@ function execScan(id, tag) {
     plate:       plate,
     driver:      drv,
     receiver:    recv,
+    facility:    facility,
+    location:    location,
+    operationDate: operationDate,
+    photo:       pendingPackagePhoto || (existing ? existing.photo : null),
     pendingDate: existing ? existing.pendingDate : now,
     receivedAt:  now,
     receiptCode: code,
@@ -1793,6 +1863,7 @@ function execScan(id, tag) {
   }
 
   var savePromise = persist();
+  pendingPackagePhoto = null;
   refreshAll();
 
   // Feedback inicial enquanto aguarda confirmacao remota
@@ -1967,7 +2038,7 @@ function buildTable(tbodyId, list, mode) {
   if (list.length === 0) {
     var tr = document.createElement('tr');
     tr.className = 'empty-row';
-    var colspan = mode === 'received' ? 8 : mode === 'alert' ? 6 : 8;
+    var colspan = mode === 'received' ? 11 : mode === 'grid' ? 12 : mode === 'alert' ? 6 : 8;
     var td = document.createElement('td');
     td.colSpan = colspan;
     td.innerHTML = '<span class="empty-ico">📦</span><strong>Nenhum registro</strong><br><small>Bipe um pacote ou ajuste os filtros</small>';
@@ -2010,6 +2081,9 @@ function buildRow(p, mode) {
 
   if (mode === 'grid') {
     tr.appendChild(tdId(p));
+    tr.appendChild(td(p.operationDate || '—', 'small'));
+    tr.appendChild(td(p.facility || '—', 'mono'));
+    tr.appendChild(td(p.location || '—', 'small'));
     tr.appendChild(tdReason(p));
     tr.appendChild(td(p.plate || '—', 'mono'));
     tr.appendChild(td(p.driver   || '—', ''));
@@ -2053,6 +2127,9 @@ function buildRow(p, mode) {
     tdC.appendChild(span);
   }
   tr.appendChild(tdId(p));
+  tr.appendChild(td(p.operationDate || '—', 'small'));
+  tr.appendChild(td(p.facility || '—', 'mono'));
+  tr.appendChild(td(p.location || '—', 'small'));
   tr.appendChild(tdC);
   tr.appendChild(td(p.reason || '—', 'small'));
   tr.appendChild(td(p.plate  || '—', 'mono'));
@@ -2203,7 +2280,7 @@ function tdActions(p, isPend) {
     btnUndo.className = 'abtn';
     btnUndo.textContent = '↩️';
     btnUndo.title = 'Reverter para Pendente';
-    btnUndo.addEventListener('click', function() { resetReceive(p.id); });
+    btnUndo.addEventListener('click', function() { reqReset(p.id); });
     wrap.appendChild(btnUndo);
   }
 
@@ -2292,12 +2369,14 @@ function reqClear() {
   setTimeout(function() { document.getElementById('pwdIn').focus(); }, 80);
 }
 
-function verifyPwd() {
-  if (document.getElementById('pwdIn').value !== (sessionStorage.getItem(SESSION_KEY2) || '')) {
-    showToast('❌ Senha incorreta!', 'd');
-    document.getElementById('pwdIn').value = '';
-    return;
-  }
+function reqReset(id) {
+  pendingAction = { type: 'reset', id: id };
+  document.getElementById('pwdIn').value = '';
+  openModal('pwdModal');
+  setTimeout(function() { document.getElementById('pwdIn').focus(); }, 80);
+}
+
+function executePendingAction() {
   closeModal('pwdModal');
   if (!pendingAction) return;
 
@@ -2311,6 +2390,12 @@ function verifyPwd() {
     for (var i = 0; i < pkgs.length; i++) markRecordDeleted('pkgs', pkgs[i].id);
     pkgs = [];
     showToast('🗑 Lista limpa.', 'i');
+  }
+  if (pendingAction.type === 'reset') {
+    var resetId = pendingAction.id;
+    pendingAction = null;
+    resetReceive(resetId);
+    return;
   }
   pendingAction = null;
   persist();
@@ -2346,6 +2431,9 @@ function openReceipt(id) {
   setText('rc-receiver', p.receiver || '—');
   setText('rc-plate',    p.plate    || '—');
   setText('rc-time',     p.receivedAt && p.receivedAt !== '—' ? p.receivedAt : fmtNow());
+  setText('rc-facility', p.facility || '—');
+  setText('rc-location', p.location || '—');
+  setText('rc-operation-date', p.operationDate || '—');
   setText('rc-cnt',      linked.length);
 
   var pkgList = document.getElementById('rc-pkgs');
@@ -2363,6 +2451,14 @@ function openReceipt(id) {
     pr.textContent = q.reason || '';
     li.appendChild(pid);
     li.appendChild(pr);
+    if (q.photo) {
+      var photo = document.createElement('img');
+      photo.src = q.photo;
+      photo.alt = 'Foto do pacote ' + q.id;
+      photo.style.cssText = 'width:42px;height:42px;object-fit:cover;border-radius:5px;margin-left:8px;cursor:pointer';
+      photo.onclick = function() { window.open(this.src, '_blank'); };
+      li.appendChild(photo);
+    }
     pkgList.appendChild(li);
   });
 
@@ -2434,6 +2530,9 @@ function saveAddPending() {
     plate:       plate,
     driver:      drv,
     receiver:    '—',
+    facility:    document.getElementById('defFacility').value || 'XPT',
+    location:    document.getElementById('defLocation').value || 'EES3 - SÃO MATEUS',
+    operationDate: document.getElementById('defDate').value || todayInputValue(),
     pendingDate: fmtDate,
     receivedAt:  '—',
     receiptCode: '',
@@ -2603,9 +2702,9 @@ function exportCSV() {
     return true;
   });
 
-  var rows = [['ID','Status','Motivo','Placa','Motorista','Triador','Desde','Recebido Em','Comprovante']];
+  var rows = [['ID','Data','Facility','Local','Status','Motivo','Placa','Motorista','Triador','Desde','Recebido Em','Comprovante']];
   list.forEach(function(p) {
-    rows.push([p.id, p.status, p.reason, p.plate, p.driver, p.receiver, p.pendingDate, p.receivedAt, p.receiptCode]);
+    rows.push([p.id, p.operationDate || '', p.facility || '', p.location || '', p.status, p.reason, p.plate, p.driver, p.receiver, p.pendingDate, p.receivedAt, p.receiptCode]);
   });
 
   var csv = rows.map(function(row) {
@@ -2721,6 +2820,57 @@ function fmtDate(d) {
 }
 
 function pad(n) { return String(n).padStart(2, '0'); }
+
+function todayInputValue() {
+  var n = new Date();
+  return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate());
+}
+
+function verifyPwd() {
+  var password = document.getElementById('pwdIn').value;
+  fetch(API_BASE + '/api/admin-session', {
+    method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: password })
+  }).then(function(response) {
+    if (!response.ok) throw new Error('Senha incorreta');
+    return response.json();
+  }).then(function() {
+    closeModal('pwdModal');
+    executePendingAction();
+  }).catch(function() {
+    showToast('Senha administrativa incorreta!', 'd');
+    document.getElementById('pwdIn').value = '';
+  });
+}
+
+function compactPhotoFile(file, done) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var maxDim = 240, w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      done(canvas.toDataURL('image/jpeg', 0.28));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function previewPackagePhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  compactPhotoFile(input.files[0], function(data) {
+    pendingPackagePhoto = data;
+    document.getElementById('sd-photo-img').src = data;
+    document.getElementById('sd-photo-preview').style.display = 'block';
+  });
+}
 
 function genCode() {
   return 'COMP-' + Math.floor(100000 + Math.random() * 900000);
@@ -2947,6 +3097,22 @@ function switchCamera() {
 
 // ── NEX ──────────────────────────────────────────────────────────
 var nexActiveSession = null;
+var nexPendingPhoto = null;
+
+function previewNexPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  compactPhotoFile(input.files[0], function(data) {
+    nexPendingPhoto = data;
+    document.getElementById('nex-photo-img').src = data;
+    document.getElementById('nex-photo-preview').style.display = 'flex';
+  });
+}
+
+function clearNexPhotoPreview() {
+  nexPendingPhoto = null;
+  var input = document.getElementById('nexPhotoInput'); if (input) input.value = '';
+  var preview = document.getElementById('nex-photo-preview'); if (preview) preview.style.display = 'none';
+}
 
 function initNex() {
   // Set today's date
@@ -3012,6 +3178,7 @@ function addNexPackage() {
       date: date,
       agency: agency,
       packages: [],
+      photos: {},
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -3020,6 +3187,15 @@ function addNexPackage() {
 
   // Check duplicate
   if (nexActiveSession.packages.indexOf(pkgId) >= 0) {
+    if (nexPendingPhoto) {
+      nexActiveSession.photos = nexActiveSession.photos || {};
+      nexActiveSession.photos[pkgId] = nexPendingPhoto;
+      nexActiveSession.updatedAt = new Date().toISOString();
+      persistNex();
+      clearNexPhotoPreview();
+      renderNexCurrent();
+      renderNexHistory();
+    }
     var info = document.getElementById('nex-session-info');
     if (info) { info.textContent = 'ID ' + pkgId + ' ja foi adicionado nesta sessao.'; info.style.color = '#d97706'; }
     scanEl.value = '';
@@ -3028,6 +3204,8 @@ function addNexPackage() {
   }
 
   nexActiveSession.packages.push(pkgId);
+  nexActiveSession.photos = nexActiveSession.photos || {};
+  if (nexPendingPhoto) nexActiveSession.photos[pkgId] = nexPendingPhoto;
   nexActiveSession.updatedAt = new Date().toISOString();
   persistNex();
 
@@ -3036,6 +3214,7 @@ function addNexPackage() {
   if (info) { info.textContent = pkgId + ' adicionado! Total: ' + nexActiveSession.packages.length; info.style.color = '#00a650'; }
 
   scanEl.value = '';
+  clearNexPhotoPreview();
   scanEl.focus();
 
   renderNexCurrent();
@@ -3073,6 +3252,14 @@ function renderNexCurrent() {
     })(i);
     tag.appendChild(num);
     tag.appendChild(txt);
+    if (nexActiveSession.photos && nexActiveSession.photos[pkgId]) {
+      var photo = document.createElement('img');
+      photo.src = nexActiveSession.photos[pkgId];
+      photo.alt = 'Foto ' + pkgId;
+      photo.style.cssText = 'width:34px;height:34px;object-fit:cover;border-radius:5px;cursor:pointer';
+      photo.onclick = function() { window.open(this.src, '_blank'); };
+      tag.appendChild(photo);
+    }
     tag.appendChild(del);
     listEl.appendChild(tag);
   }
@@ -3081,7 +3268,9 @@ function renderNexCurrent() {
 function removeNexPackage(idx) {
   if (!nexActiveSession) return;
   var sessionId = nexActiveSession.id;
+  var removedId = nexActiveSession.packages[idx];
   nexActiveSession.packages.splice(idx, 1);
+  if (nexActiveSession.photos) delete nexActiveSession.photos[removedId];
   nexActiveSession.updatedAt = new Date().toISOString();
   if (nexActiveSession.packages.length === 0) {
     markRecordDeleted('nexSessions', sessionId);
@@ -3145,6 +3334,8 @@ function renderNexHistory() {
     tdIds.style.cssText = 'font-size:0.7rem;color:#6B7280;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
     tdIds.title = s.packages.join(', ');
     tdIds.textContent = s.packages.slice(0, 3).join(', ') + (s.packages.length > 3 ? ' +' + (s.packages.length - 3) + ' mais' : '');
+    var photoCount = s.photos ? Object.keys(s.photos).length : 0;
+    if (photoCount) tdIds.textContent += ' · 📷 ' + photoCount;
 
     var tdAct = document.createElement('td');
     var delBtn = document.createElement('button');

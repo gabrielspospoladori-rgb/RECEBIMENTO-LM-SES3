@@ -15,6 +15,7 @@
 	"secrets": {
 		"required": [
 			"APP_PASSWORD",
+			"ADMIN_PASSWORD",
 			"SESSION_SECRET"
 		]
 	},
