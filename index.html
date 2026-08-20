@@ -604,17 +604,21 @@ input,select,textarea{-webkit-appearance:none}
     <!-- VIEW: ALERTA -->
     <div id="view-alert" style="display:none">
       <div class="ph">
-        <div class="ph-info"><div class="ph-title">🚨 Alerta +24h</div><div class="ph-sub">Ultrapassaram o prazo máximo de entrega</div></div>
+        <div class="ph-info"><div class="ph-title">🚨 Alerta +24h</div><div class="ph-sub">Pacotes Voando ou Faltantes sem movimentação há mais de 24 horas</div></div>
       </div>
-      <div class="alert-banner">⚠️ Esses pacotes estão há mais de 24h sem recebimento. Acione o motorista imediatamente!</div>
+      <div class="alert-banner">⚠️ Casos sem movimentação há mais de 24h. Ao finalizar, clique em Resolvido.</div>
       <div class="tcard">
+        <div class="ttbar"><div class="tt-title">Casos em alerta <span class="tt-chip" id="cntAlertCases">0</span></div></div>
         <div style="overflow-x:auto"><table class="dt">
           <thead><tr>
-            <th>ID do Pacote</th><th>Motivo</th><th>Motorista</th><th>Placa</th>
-            <th>Desde</th><th class="center">Horas em Aberto</th><th class="right">Ações</th>
+            <th>ID do Pacote</th><th>Tipo</th><th>Registrado por</th><th>Última movimentação</th><th class="center">Horas sem movimentação</th><th class="right">Ações</th>
           </tr></thead>
           <tbody id="alertBody"></tbody>
         </table></div>
+      </div>
+      <div class="tcard" style="margin-top:14px">
+        <div class="ttbar"><div class="tt-title">✅ Histórico de casos resolvidos <span class="tt-chip" id="cntResolvedCases">0</span></div></div>
+        <div style="overflow-x:auto"><table class="dt"><thead><tr><th>ID do Pacote</th><th>Tipo</th><th>Registrado por</th><th>Resolvido por</th><th>Função</th><th>Data e horário</th></tr></thead><tbody id="resolvedCasesBody"></tbody></table></div>
       </div>
     </div>
 
@@ -2001,7 +2005,6 @@ function refreshAll() {
     var st = pkgs[i].status;
     if (st === 'Pendente') {
       pend++;
-      if (hoursOpen(pkgs[i].pendingDate) > 24) alert24++;
     } else if (st === 'Pacote Voando') {
       voando++;
     } else if (st === 'Pacote Faltante') {
@@ -2010,6 +2013,7 @@ function refreshAll() {
       rec++;
     }
   }
+  alert24 = getAlertCases(false).length;
 
   setText('kTotal',   total);
   setText('kRec',     rec);
@@ -2103,10 +2107,80 @@ function renderFaltante() {
    RENDER: ALERT
 =================================================================== */
 function renderAlert() {
-  var list = pkgs.filter(function(p) {
-    return p.status === 'Pendente' && hoursOpen(p.pendingDate) > 24;
+  var active = getAlertCases(false), resolved = getAlertCases(true);
+  setText('cntAlertCases', active.length); setText('cntResolvedCases', resolved.length);
+  var tbody = document.getElementById('alertBody'), history = document.getElementById('resolvedCasesBody');
+  tbody.innerHTML = ''; history.innerHTML = '';
+  if (!active.length) appendAlertEmpty(tbody, 'Nenhum caso em alerta há mais de 24h.');
+  active.forEach(function(item) {
+    var tr = document.createElement('tr');
+    tr.appendChild(td(item.packageId, 'mono')); tr.appendChild(td(item.type, '')); tr.appendChild(td(item.submittedByName || '—', ''));
+    tr.appendChild(td(formatMovementTime(item.movementAt), 'small')); tr.appendChild(td(Math.floor(item.hours) + 'h', ''));
+    var action = document.createElement('td'); action.className = 'right';
+    var button = document.createElement('button'); button.className = 'fbtn prim'; button.textContent = '✅ Resolvido';
+    button.onclick = function() { resolveAlertCase(item.source, item.key, item.packageId); };
+    action.appendChild(button); tr.appendChild(action); tbody.appendChild(tr);
   });
-  buildTable('alertBody', list, 'alert');
+  if (!resolved.length) appendAlertEmpty(history, 'Nenhum caso resolvido ainda.');
+  resolved.forEach(function(item) {
+    var tr = document.createElement('tr');
+    tr.appendChild(td(item.packageId, 'mono')); tr.appendChild(td(item.type, '')); tr.appendChild(td(item.submittedByName || '—', ''));
+    tr.appendChild(td(item.resolvedByName || '—', '')); tr.appendChild(td(item.resolvedByJobTitle || '—', '')); tr.appendChild(td(formatMovementTime(item.resolvedAt), 'small'));
+    history.appendChild(tr);
+  });
+}
+
+function appendAlertEmpty(tbody, message) {
+  var tr = document.createElement('tr'), cell = document.createElement('td');
+  cell.colSpan = 6; cell.style.cssText = 'text-align:center;padding:28px;color:#9CA3AF'; cell.textContent = message;
+  tr.appendChild(cell); tbody.appendChild(tr);
+}
+
+function movementTimestamp(value) {
+  if (!value || value === '—') return 0;
+  var iso = Date.parse(value); if (!isNaN(iso)) return iso;
+  var parts = String(value).split(' '), d = parts[0].split('/'), t = (parts[1] || '00:00').split(':');
+  return d.length === 3 ? new Date(Number(d[2]), Number(d[1]) - 1, Number(d[0]), Number(t[0]), Number(t[1])).getTime() : 0;
+}
+
+function formatMovementTime(value) {
+  var ts = movementTimestamp(value); return ts ? new Date(ts).toLocaleString('pt-BR') : '—';
+}
+
+function makeAlertCase(source, key, packageId, type, record, movementAt) {
+  var ts = movementTimestamp(movementAt);
+  return { source: source, key: key, packageId: packageId, type: type, submittedByName: record.submittedByName || record.receiver || '—', movementAt: movementAt, hours: ts ? (Date.now() - ts) / 3600000 : 0, resolvedAt: record.resolvedAt, resolvedByName: record.resolvedByName, resolvedByJobTitle: record.resolvedByJobTitle };
+}
+
+function getAlertCases(resolvedOnly) {
+  var cases = [];
+  pkgs.forEach(function(p) {
+    if (p.status !== 'Pacote Voando' && p.status !== 'Pacote Faltante') return;
+    var item = makeAlertCase('pkgs', String(p.id), String(p.id), p.status === 'Pacote Voando' ? 'Voando' : 'Faltante', p, p.updatedAt || p.ts || p.pendingDate);
+    if ((resolvedOnly && item.resolvedAt) || (!resolvedOnly && !item.resolvedAt && item.hours > 24)) cases.push(item);
+  });
+  faltanteReg.forEach(function(e) {
+    var item = makeAlertCase('faltanteReg', e.id, e.packageId, 'Faltante', e, e.updatedAt || e.createdAt || e.date);
+    if ((resolvedOnly && item.resolvedAt) || (!resolvedOnly && !item.resolvedAt && item.hours > 24)) cases.push(item);
+  });
+  voandoReg.forEach(function(e) {
+    var item = makeAlertCase('voandoReg', e.id, e.packageId, 'Voando', e, e.updatedAt || e.createdAt || e.date);
+    if ((resolvedOnly && item.resolvedAt) || (!resolvedOnly && !item.resolvedAt && item.hours > 24)) cases.push(item);
+  });
+  cases.sort(function(a, b) { return resolvedOnly ? movementTimestamp(b.resolvedAt) - movementTimestamp(a.resolvedAt) : b.hours - a.hours; });
+  return cases;
+}
+
+function resolveAlertCase(source, key, packageId) {
+  var actor = currentUser();
+  if (!actor) { showToast('Entre novamente para resolver o caso.', 'w'); return; }
+  if (!window.confirm('Confirma que o caso do pacote ' + packageId + ' foi resolvido?')) return;
+  var collection = source === 'pkgs' ? pkgs : source === 'faltanteReg' ? faltanteReg : voandoReg;
+  var record = collection.find(function(item) { return String(item.id) === String(key); });
+  if (!record) { showToast('Caso não encontrado.', 'd'); return; }
+  record.resolvedAt = new Date().toISOString(); record.resolvedBy = actor.username; record.resolvedByName = actor.displayName; record.resolvedByJobTitle = actor.jobTitle || ''; record.updatedAt = new Date().toISOString();
+  var promise = source === 'pkgs' ? persist() : source === 'faltanteReg' ? persistFaltanteReg() : persistVoandoReg();
+  Promise.resolve(promise).then(function() { showToast('Caso resolvido e registrado no histórico.', 's'); refreshAll(); renderAlert(); });
 }
 
 /* ===================================================================

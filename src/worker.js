@@ -321,7 +321,8 @@ async function handleGetData(request, env) {
 }
 
 function bindOperationalActors(incoming, current, session) {
-  var actor = { username: session.username, displayName: session.displayName };
+  var actor = { username: session.username, displayName: session.displayName, jobTitle: session.jobTitle || "" };
+  var resolutionTime = new Date().toISOString();
   var currentPkgs = current && Array.isArray(current.pkgs) ? current.pkgs : [];
   var existingPkgs = {};
   for (var i = 0; i < currentPkgs.length; i++) existingPkgs[String(currentPkgs[i].id)] = currentPkgs[i];
@@ -342,6 +343,17 @@ function bindOperationalActors(incoming, current, session) {
           item.lastModifiedBy = actor.username;
           item.lastModifiedByName = actor.displayName;
         }
+        if (!old.resolvedAt && item.resolvedAt) {
+          item.resolvedAt = resolutionTime;
+          item.resolvedBy = actor.username;
+          item.resolvedByName = actor.displayName;
+          item.resolvedByJobTitle = actor.jobTitle;
+        } else if (old.resolvedAt) {
+          item.resolvedAt = old.resolvedAt;
+          item.resolvedBy = old.resolvedBy;
+          item.resolvedByName = old.resolvedByName;
+          item.resolvedByJobTitle = old.resolvedByJobTitle;
+        }
       }
     }
   }
@@ -357,6 +369,17 @@ function bindOperationalActors(incoming, current, session) {
       var previous = oldIds[String(record.id)];
       record.submittedBy = previous && previous.submittedBy ? previous.submittedBy : actor.username;
       record.submittedByName = previous && previous.submittedByName ? previous.submittedByName : actor.displayName;
+      if (previous && !previous.resolvedAt && record.resolvedAt) {
+        record.resolvedAt = resolutionTime;
+        record.resolvedBy = actor.username;
+        record.resolvedByName = actor.displayName;
+        record.resolvedByJobTitle = actor.jobTitle;
+      } else if (previous && previous.resolvedAt) {
+        record.resolvedAt = previous.resolvedAt;
+        record.resolvedBy = previous.resolvedBy;
+        record.resolvedByName = previous.resolvedByName;
+        record.resolvedByJobTitle = previous.resolvedByJobTitle;
+      }
     }
   }
   var oldSessions = current && Array.isArray(current.nexSessions) ? current.nexSessions : [];
