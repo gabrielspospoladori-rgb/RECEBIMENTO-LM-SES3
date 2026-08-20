@@ -2373,7 +2373,10 @@ function tdStatus(p, isPend, hrs, isAlert) {
   var el = document.createElement('td');
   el.className = 'center';
   var span = document.createElement('span');
-  if (isAlert) {
+  if (p.resolvedAt) {
+    span.className = 'badge recv';
+    span.textContent = '✅ Resolvido';
+  } else if (isAlert) {
     span.className = 'badge alert';
     span.textContent = '🚨 +' + Math.floor(hrs) + 'h';
   } else if (p.status === 'Pacote Voando') {
@@ -2418,6 +2421,15 @@ function tdActions(p, isPend) {
   wrap.appendChild(btnRc);
 
   var st = p.status;
+
+  if (!p.resolvedAt && (st === 'Pacote Voando' || st === 'Pacote Faltante')) {
+    var btnResolve = document.createElement('button');
+    btnResolve.className = 'abtn g';
+    btnResolve.textContent = '✅';
+    btnResolve.title = 'Marcar caso como Resolvido';
+    btnResolve.addEventListener('click', function() { resolveAlertCase('pkgs', String(p.id), String(p.id)); });
+    wrap.appendChild(btnResolve);
+  }
 
   // Receber (se pendente, voando ou faltante)
   if (isAdmin() && (st === 'Pendente' || st === 'Pacote Voando' || st === 'Pacote Faltante')) {
@@ -3801,15 +3813,21 @@ function renderFaltanteRegTable() {
     for (var k = 0; k < cells.length; k++) { var td2 = document.createElement('td'); td2.textContent = cells[k]; if (k===3) td2.style.fontWeight='700'; tr.appendChild(td2); }
     var tdActor = document.createElement('td'); tdActor.textContent = e.submittedByName || '—'; tr.appendChild(tdActor);
     var tdStatus = document.createElement('td');
-    if (isAchado) { var sp = document.createElement('span'); sp.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp.textContent='🎯 Achado'; tdStatus.appendChild(sp); }
+    if (e.resolvedAt) { var spr = document.createElement('span'); spr.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; spr.textContent='✅ Resolvido'; tdStatus.appendChild(spr); }
+    else if (isAchado) { var sp = document.createElement('span'); sp.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp.textContent='🎯 Achado'; tdStatus.appendChild(sp); }
     else { var sp2 = document.createElement('span'); sp2.style.cssText='background:#FEE2E2;color:#991b1b;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp2.textContent='❓ Faltante'; tdStatus.appendChild(sp2); }
     tr.appendChild(tdStatus);
     var tdAct = document.createElement('td');
+    if (!e.resolvedAt) {
+      var resolveBtn = document.createElement('button'); resolveBtn.className='fbtn prim'; resolveBtn.textContent='✅ Resolvido';
+      (function(eid,pid){resolveBtn.onclick=function(){resolveAlertCase('faltanteReg',eid,pid);};})(e.id,e.packageId);
+      tdAct.appendChild(resolveBtn);
+    }
     var btn = document.createElement('button');
     btn.style.cssText='background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;cursor:pointer';
     btn.textContent='🗑';
     (function(eid) { btn.onclick = function() { markRecordDeleted('faltanteReg', eid); faltanteReg = faltanteReg.filter(function(x){return x.id!==eid;}); persistFaltanteReg(); renderFaltanteRegTable(); checkAchados(); updateAchadosBadge(); }; })(e.id);
-    tdAct.appendChild(btn); tr.appendChild(tdAct);
+    if (isAdmin()) { btn.style.marginLeft='5px'; tdAct.appendChild(btn); } tr.appendChild(tdAct);
     tbody.appendChild(tr);
   }
 }
@@ -3914,12 +3932,15 @@ function renderVoandoRegTable() {
     if (e.photo) { var img=document.createElement('img'); img.src=e.photo; img.style.cssText='width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #E5E7EB;cursor:pointer'; img.onclick=(function(src){return function(){var w=window.open();w.document.write('<img src="'+src+'" style="max-width:100%">');}})(e.photo); tdPhoto.appendChild(img); } else { tdPhoto.textContent='—'; tdPhoto.style.color='#9CA3AF'; }
     tr.appendChild(tdPhoto);
     var tdStatus=document.createElement('td');
-    if (isAchado) { var sp=document.createElement('span'); sp.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp.textContent='🎯 Achado'; tdStatus.appendChild(sp); }
+    if (e.resolvedAt) { var spr=document.createElement('span'); spr.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; spr.textContent='✅ Resolvido'; tdStatus.appendChild(spr); }
+    else if (isAchado) { var sp=document.createElement('span'); sp.style.cssText='background:#D1FAE5;color:#065f46;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp.textContent='🎯 Achado'; tdStatus.appendChild(sp); }
     else { var sp2=document.createElement('span'); sp2.style.cssText='background:#EDE9FE;color:#5B21B6;border-radius:5px;padding:2px 8px;font-size:0.72rem;font-weight:800'; sp2.textContent='✈ Voando'; tdStatus.appendChild(sp2); }
     tr.appendChild(tdStatus);
-    var tdAct=document.createElement('td'); var btn=document.createElement('button'); btn.style.cssText='background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;cursor:pointer'; btn.textContent='🗑';
+    var tdAct=document.createElement('td');
+    if (!e.resolvedAt) { var resolveBtn=document.createElement('button'); resolveBtn.className='fbtn prim'; resolveBtn.textContent='✅ Resolvido'; (function(eid,pid){resolveBtn.onclick=function(){resolveAlertCase('voandoReg',eid,pid);};})(e.id,e.packageId); tdAct.appendChild(resolveBtn); }
+    var btn=document.createElement('button'); btn.style.cssText='background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 8px;font-size:0.68rem;cursor:pointer;margin-left:5px'; btn.textContent='🗑';
     (function(eid){btn.onclick=function(){markRecordDeleted('voandoReg', eid);voandoReg=voandoReg.filter(function(x){return x.id!==eid;});persistVoandoReg();renderVoandoRegTable();checkAchados();updateAchadosBadge();};})(e.id);
-    tdAct.appendChild(btn); tr.appendChild(tdAct);
+    if (isAdmin()) tdAct.appendChild(btn); tr.appendChild(tdAct);
     tbody.appendChild(tr);
   }
 }

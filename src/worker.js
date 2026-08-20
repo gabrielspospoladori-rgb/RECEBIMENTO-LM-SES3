@@ -324,6 +324,19 @@ function bindOperationalActors(incoming, current, session) {
   var actor = { username: session.username, displayName: session.displayName, jobTitle: session.jobTitle || "" };
   var resolutionTime = new Date().toISOString();
   var currentPkgs = current && Array.isArray(current.pkgs) ? current.pkgs : [];
+  if (session.role !== "admin") {
+    var protectedCollections = ["pkgs", "nexSessions", "faltanteReg", "voandoReg"];
+    for (var pc = 0; pc < protectedCollections.length; pc++) {
+      var protectedName = protectedCollections[pc];
+      var protectedOld = current && Array.isArray(current[protectedName]) ? current[protectedName] : [];
+      var protectedIncoming = Array.isArray(incoming[protectedName]) ? incoming[protectedName] : [];
+      var incomingIds = {};
+      for (var pi = 0; pi < protectedIncoming.length; pi++) incomingIds[String(protectedIncoming[pi].id)] = true;
+      for (var po = 0; po < protectedOld.length; po++) if (!incomingIds[String(protectedOld[po].id)]) protectedIncoming.push(protectedOld[po]);
+      incoming[protectedName] = protectedIncoming;
+    }
+    incoming.deletedRecords = current && current.deletedRecords ? current.deletedRecords : {};
+  }
   var existingPkgs = {};
   for (var i = 0; i < currentPkgs.length; i++) existingPkgs[String(currentPkgs[i].id)] = currentPkgs[i];
   if (Array.isArray(incoming.pkgs)) {
