@@ -964,7 +964,7 @@ input,select,textarea{-webkit-appearance:none}
 <div class="overlay" id="scanDetailsModal">
   <div class="modal" style="max-width:440px">
     <div class="mhd">📷 Confirmar recebimento pela câmera</div>
-    <div style="background:#FFF9C4;border:1px solid #F4D800;border-radius:8px;padding:9px 11px;margin-bottom:12px;font-size:0.76rem"><b>ID lido:</b> <span id="sd-package-id" style="font-family:monospace;font-weight:900"></span></div>
+    <div class="mfield"><label>ID do pacote lido *</label><input id="sd-package-id" placeholder="Confira ou corrija o ID" autocomplete="off" autocapitalize="characters" spellcheck="false" style="font-family:monospace;font-weight:900;text-transform:uppercase"></div>
     <div class="mfield"><label>Triador / Responsável *</label><input id="sd-receiver" placeholder="Nome do triador" autocomplete="name"></div>
     <div class="mfield"><label>Motorista *</label><input id="sd-driver" placeholder="Nome do motorista" autocomplete="name"></div>
     <div class="mfield"><label>Placa do veículo *</label><input id="sd-plate" placeholder="ABC1D23" maxlength="8" style="text-transform:uppercase" autocomplete="off"></div>
@@ -1648,12 +1648,19 @@ function cameraDisplayId(raw) {
   return id;
 }
 
+function normalizePackageId(raw) {
+  var id = cameraDisplayId(raw);
+  try { id = id.normalize('NFKC'); } catch(e) {}
+  return id.trim().toUpperCase();
+}
+
 function openCameraScanDetails(raw) {
   pendingCameraRaw = String(raw || '').trim();
   var receiver = document.getElementById('defReceiver').value.trim();
   var driver = document.getElementById('defDriver').value.trim();
   var plate = document.getElementById('defPlate').value.trim();
-  document.getElementById('sd-package-id').textContent = cameraDisplayId(pendingCameraRaw);
+  var scannedId = normalizePackageId(pendingCameraRaw);
+  document.getElementById('sd-package-id').value = scannedId;
   document.getElementById('sd-receiver').value = receiver === '—' ? '' : receiver;
   document.getElementById('sd-driver').value = driver === '—' ? '' : driver;
   document.getElementById('sd-plate').value = plate === '—' ? '' : plate;
@@ -1667,10 +1674,12 @@ function openCameraScanDetails(raw) {
 }
 
 function confirmCameraScan() {
+  var packageId = normalizePackageId(document.getElementById('sd-package-id').value);
   var receiver = document.getElementById('sd-receiver').value.trim();
   var driver = document.getElementById('sd-driver').value.trim();
   var plate = document.getElementById('sd-plate').value.trim().toUpperCase();
   var status = document.getElementById('sd-status');
+  if (!packageId) { status.textContent = 'Informe o ID do pacote.'; return; }
   if (!receiver || !driver || !plate) {
     status.textContent = 'Preencha Triador, Motorista e Placa para continuar.';
     return;
@@ -1682,7 +1691,7 @@ function confirmCameraScan() {
   document.getElementById('defReceiver').value = receiver;
   document.getElementById('defDriver').value = driver;
   document.getElementById('defPlate').value = plate;
-  var raw = pendingCameraRaw;
+  var raw = packageId;
   closeModal('scanDetailsModal');
   pendingCameraRaw = null;
   processScan(raw);
@@ -1694,13 +1703,13 @@ function cancelCameraScan() {
 }
 
 function processScan(raw) {
-  var id = raw.trim();
+  var id = normalizePackageId(raw);
   var tag = null;
 
   // Try to parse JSON (QR code may encode JSON)
   try {
     var obj = JSON.parse(raw);
-    if (obj && obj.id) { id = String(obj.id); tag = obj.t || null; }
+    if (obj && obj.id) { id = normalizePackageId(obj.id); tag = obj.t || null; }
   } catch(e) {}
 
   // Check for duplicates (already received, not just pending)
@@ -2743,6 +2752,16 @@ var lastScannedTime = 0;
 var zxingReader = null;
 var zxingControls = null;
 
+function createPackageBarcodeReader() {
+  var hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.CODE_128,
+    ZXing.BarcodeFormat.QR_CODE
+  ]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  return new ZXing.BrowserMultiFormatReader(hints, 250);
+}
+
 function camStatus(msg, cls) {
   var el = document.getElementById('cam-status');
   if (!el) return;
@@ -2819,7 +2838,7 @@ function processPhotoScan(input) {
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
 
-      var imgReader = new ZXing.BrowserMultiFormatReader();
+      var imgReader = createPackageBarcodeReader();
       imgReader.decodeFromCanvas(canvas).then(function(result) {
         var text = result.getText();
         if (statusEl) { statusEl.textContent = 'Lido: ' + text; statusEl.style.color = '#00a650'; }
@@ -2863,7 +2882,7 @@ function openCamera() {
   }
   zxingControls = null;
 
-  zxingReader = new ZXing.BrowserMultiFormatReader();
+  zxingReader = createPackageBarcodeReader();
 
   var constraints = { video: { facingMode: { ideal: camFacingMode }, width: { ideal: 1280 }, height: { ideal: 720 } } };
 
