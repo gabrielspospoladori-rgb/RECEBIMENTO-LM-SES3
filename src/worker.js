@@ -26,7 +26,7 @@ function corsHeaders(request) {
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
     headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type";
-    headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, OPTIONS";
+    headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, PATCH, OPTIONS";
     headers["Access-Control-Max-Age"] = "86400";
   }
   return headers;
@@ -150,6 +150,17 @@ async function handleSession(request, env) {
   return jsonResponse(request, { token: token, user: user, expiresIn: SESSION_DURATION_MS / 1000 });
 }
 
+async function requireAdmin(request, env) {
+  var session = await requireSession(request, env);
+  if (!session) return false;
+  if (session.username === "MELI") return session;
+  var row = await env.DB.prepare("SELECT display_name, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(session.username).first();
+  if (!row || row.active !== 1 || row.role !== "admin") return false;
+  session.displayName = row.display_name;
+  session.role = row.role;
+  return session;
+}
+
 function xorCipher(value, key) {
   var out = "";
   for (var i = 0; i < value.length; i++) out += String.fromCharCode(value.charCodeAt(i) ^ key.charCodeAt(i % key.length));
@@ -196,6 +207,33 @@ async function handleUsers(request, env, session) {
   var results = rows.results || [];
   for (var i = 0; i < results.length; i++) users.push({ username: results[i].username, displayName: results[i].display_name, role: results[i].role, active: results[i].active, createdAt: results[i].created_at, lastLoginAt: results[i].last_login_at });
   return jsonResponse(request, { users: users });
+}
+
+async function handleUserAdminUpdate(request, env, session, username) {
+  if (!session || session.role !== "admin") return jsonResponse(request, { error: "Acesso exclusivo do administrador" }, 403);
+  username = normalizeUsername(username);
+  if (!/^[A-Z0-9._-]{3,32}$/.test(username) || username === "MELI") return jsonResponse(request, { error: "A conta principal MELI nao pode ser alterada" }, 400);
+  var user = await env.DB.prepare("SELECT username, display_name, role, active FROM app_users WHERE username = ?1 COLLATE NOCASE").bind(username).first();
+  if (!user) return jsonResponse(request, { error: "Usuario nao encontrado" }, 404);
+  var body = await readJson(request);
+  if (body.action === "reset_password") {
+    var password = String(body.password || "");
+    if (password.length < 4 || password.length > 128) return jsonResponse(request, { error: "Senha deve ter entre 4 e 128 caracteres" }, 400);
+    var salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    var hash = await passwordHash(password, salt);
+    await env.DB.prepare("UPDATE app_users SET password_hash = ?1, password_salt = ?2 WHERE username = ?3 COLLATE NOCASE").bind(hash, salt, username).run();
+    await audit(env, session, "redefiniu_senha:" + username);
+    return jsonResponse(request, { ok: true });
+  }
+  if (body.action === "set_role") {
+    var role = body.role === "admin" ? "admin" : body.role === "user" ? "user" : "";
+    if (!role) return jsonResponse(request, { error: "Perfil invalido" }, 400);
+    if (username === session.username && role !== "admin") return jsonResponse(request, { error: "Voce nao pode remover seu proprio acesso administrativo" }, 400);
+    await env.DB.prepare("UPDATE app_users SET role = ?1 WHERE username = ?2 COLLATE NOCASE").bind(role, username).run();
+    await audit(env, session, (role === "admin" ? "promoveu_admin:" : "removeu_admin:") + username);
+    return jsonResponse(request, { ok: true, role: role });
+  }
+  return jsonResponse(request, { error: "Acao invalida" }, 400);
 }
 
 async function handlePhotoUpload(request, env, session) {
@@ -246,8 +284,8 @@ async function audit(env, user, action) {
 }
 
 async function handleAdminSession(request, env) {
-  var session = await requireSession(request, env);
-  if (!session || session.role !== "admin") return jsonResponse(request, { error: "Acesso exclusivo do administrador" }, 403);
+  var session = await requireAdmin(request, env);
+  if (!session) return jsonResponse(request, { error: "Acesso exclusivo do administrador" }, 403);
   var body = await readJson(request);
   if (!body || typeof body.password !== "string") return jsonResponse(request, { error: "Senha obrigatoria" }, 400);
   var valid = await sameSecret(body.password, env.ADMIN_PASSWORD);
@@ -301,8 +339,12 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/register") return await handleRegister(request, env);
       if (request.method === "POST" && url.pathname === "/api/admin-session") return await handleAdminSession(request, env);
       if (request.method === "GET" && url.pathname === "/api/users") {
-        var usersSession = await requireSession(request, env);
+        var usersSession = await requireAdmin(request, env);
         return await handleUsers(request, env, usersSession);
+      }
+      if (request.method === "PATCH" && url.pathname.indexOf("/api/users/") === 0) {
+        var userAdminSession = await requireAdmin(request, env);
+        return await handleUserAdminUpdate(request, env, userAdminSession, decodeURIComponent(url.pathname.slice(11)));
       }
       if (request.method === "POST" && url.pathname === "/api/photos") {
         var photoSession = await requireSession(request, env);

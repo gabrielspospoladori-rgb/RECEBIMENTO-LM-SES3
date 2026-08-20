@@ -872,8 +872,8 @@ input,select,textarea{-webkit-appearance:none}
     </div><!-- end view-achados -->
 
     <div id="view-users" style="display:none">
-      <div class="ph"><div class="ph-info"><div class="ph-title">👥 Usuários cadastrados</div><div class="ph-sub">Acesso exclusivo do administrador MELI</div></div><button class="fbtn" onclick="loadUsers()">Atualizar</button></div>
-      <div class="tcard"><div style="overflow-x:auto"><table class="dt"><thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Cadastrado em</th><th>Último acesso</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>
+      <div class="ph"><div class="ph-info"><div class="ph-title">👥 Usuários cadastrados</div><div class="ph-sub">Administradores podem redefinir senhas e conceder acesso administrativo</div></div><button class="fbtn" onclick="loadUsers()">Atualizar</button></div>
+      <div class="tcard"><div style="overflow-x:auto"><table class="dt"><thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Cadastrado em</th><th>Último acesso</th><th class="right">Ferramentas</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>
     </div>
 
   </main>
@@ -2934,7 +2934,7 @@ function loadUsers() {
   if (!isAdmin()) return;
   var tbody = document.getElementById('usersBody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="5">Carregando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
   fetch(API_BASE + '/api/users', { headers: apiHeaders(), cache: 'no-store' })
     .then(function(response) { if (!response.ok) throw new Error('Acesso negado'); return response.json(); })
     .then(function(result) {
@@ -2946,9 +2946,52 @@ function loadUsers() {
         tr.appendChild(td(user.role === 'admin' ? 'Administrador' : 'Operador', ''));
         tr.appendChild(td(user.createdAt ? new Date(user.createdAt).toLocaleString('pt-BR') : 'Conta principal', 'small'));
         tr.appendChild(td(user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('pt-BR') : '—', 'small'));
+        var actions = document.createElement('td');
+        actions.className = 'right';
+        if (user.username !== 'MELI') {
+          var reset = document.createElement('button');
+          reset.className = 'fbtn';
+          reset.textContent = '🔑 Alterar senha';
+          reset.onclick = function() { resetUserPassword(user.username, user.displayName); };
+          actions.appendChild(reset);
+          var role = document.createElement('button');
+          role.className = 'fbtn';
+          role.style.marginLeft = '5px';
+          role.textContent = user.role === 'admin' ? 'Remover admin' : '⭐ Tornar admin';
+          role.onclick = function() { setUserRole(user.username, user.displayName, user.role === 'admin' ? 'user' : 'admin'); };
+          actions.appendChild(role);
+        } else {
+          actions.textContent = 'Conta principal';
+        }
+        tr.appendChild(actions);
         tbody.appendChild(tr);
       });
-    }).catch(function(error) { tbody.innerHTML = '<tr><td colspan="5">' + error.message + '</td></tr>'; });
+    }).catch(function(error) { tbody.innerHTML = '<tr><td colspan="6">' + error.message + '</td></tr>'; });
+}
+
+function updateUserAccount(username, payload, successMessage) {
+  return fetch(API_BASE + '/api/users/' + encodeURIComponent(username), {
+    method: 'PATCH', headers: apiHeaders(), cache: 'no-store', body: JSON.stringify(payload)
+  }).then(function(response) {
+    return response.json().then(function(result) {
+      if (!response.ok) throw new Error(result.error || 'Não foi possível alterar a conta');
+      showToast(successMessage, 's');
+      loadUsers();
+    });
+  }).catch(function(error) { showToast(error.message, 'd'); });
+}
+
+function resetUserPassword(username, displayName) {
+  var password = window.prompt('Digite a nova senha para ' + displayName + ' (mínimo 4 caracteres):');
+  if (password === null) return;
+  if (password.length < 4) { showToast('A senha deve ter pelo menos 4 caracteres.', 'w'); return; }
+  updateUserAccount(username, { action: 'reset_password', password: password }, 'Senha de ' + displayName + ' alterada.');
+}
+
+function setUserRole(username, displayName, role) {
+  var label = role === 'admin' ? 'tornar ' + displayName + ' administrador' : 'remover o acesso administrativo de ' + displayName;
+  if (!window.confirm('Confirma ' + label + '?')) return;
+  updateUserAccount(username, { action: 'set_role', role: role }, role === 'admin' ? displayName + ' agora é administrador.' : displayName + ' agora é operador.');
 }
 
 function compactPhotoFile(file, done) {
