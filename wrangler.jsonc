@@ -1,0 +1,28 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "recebimento-lm-ses3-api",
+	"main": "src/worker.js",
+	"compatibility_date": "2026-08-20",
+	"workers_dev": true,
+	"preview_urls": false,
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
+	"secrets": {
+		"required": [
+			"APP_PASSWORD",
+			"SESSION_SECRET"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "recebimento-lm-ses3",
+			"database_id": "e5f470fb-35d4-4f60-bffa-397cecee8484"
+		}
+	]
+}

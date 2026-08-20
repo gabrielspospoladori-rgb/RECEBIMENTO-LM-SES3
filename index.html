@@ -457,7 +457,7 @@ input,select,textarea{-webkit-appearance:none}
       <div class="sync-dot" id="syncDot"></div>
       <span id="syncTxt">Aguardando...</span>
     </div>
-    <button class="cfg-btn" onclick="openModal('cfgModal')" title="Configurar GitHub">⚙️</button>
+    <button class="cfg-btn" onclick="doSync()" title="Sincronização automática">☁️</button>
   </div>
 </div>
 
@@ -960,7 +960,7 @@ input,select,textarea{-webkit-appearance:none}
   </div>
 </div>
 
-<!-- MODAL: Config GitHub -->
+<!-- MODAL: Confirmação de dados da câmera -->
 <div class="overlay" id="scanDetailsModal">
   <div class="modal" style="max-width:440px">
     <div class="mhd">📷 Confirmar recebimento pela câmera</div>
@@ -972,22 +972,6 @@ input,select,textarea{-webkit-appearance:none}
     <div class="mft">
       <button class="fbtn prim" onclick="confirmCameraScan()">✅ Confirmar e salvar</button>
       <button class="fbtn" onclick="cancelCameraScan()">Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="cfgModal">
-  <div class="modal" style="max-width:440px">
-    <div class="mhd">⚙️ Configurar GitHub</div>
-    <div class="warn-box">⚠️ O token fica salvo apenas neste aparelho. Use um token restrito ao repositório com permissão <code>Contents: Read and write</code>.</div>
-    <div class="mfield"><label>GitHub Token (PAT)</label><input type="password" id="cfg-token" placeholder="github_pat_..."></div>
-    <div class="mfield"><label>Repositório (usuario/repo)</label><input id="cfg-repo" placeholder="meu-usuario/meu-repositorio"></div>
-    <div class="mfield"><label>Arquivo de dados</label><input id="cfg-file" placeholder="data.json"></div>
-    <div style="background:#F3F4F6;border-radius:8px;padding:9px 11px;margin-top:8px;font-size:0.72rem;color:#4B5563"><b>Retenção:</b> os registros operacionais são mantidos por 180 dias. Itens sem data válida são preservados para revisão.</div>
-    <div id="cfg-status" style="min-height:18px;margin-top:8px;font-size:0.74rem;font-weight:700"></div>
-    <div class="mft">
-      <button class="fbtn prim" id="cfg-save-btn" onclick="saveCfg()">💾 Validar e Sincronizar</button>
-      <button class="fbtn" onclick="closeModal('cfgModal')">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1053,6 +1037,8 @@ input,select,textarea{-webkit-appearance:none}
 =================================================================== */
 var SESSION_KEY  = 'ses3_auth';
 var SESSION_KEY2 = 'ses3_key';
+var API_TOKEN_KEY = 'ses3_api_token';
+var API_BASE = 'https://recebimento-lm-ses3-api.gabrielspo-spoladori.workers.dev';
 
 /* ---- XOR cipher: data.json fica criptografado, ilegivel sem a senha ---- */
 function xorCipher(str, key) {
@@ -1085,58 +1071,34 @@ function doLogin() {
   if (!pwd.trim()) { if (err) err.textContent = 'Digite a senha.'; return; }
   if (err) err.textContent = 'Verificando...';
 
-  var rawUrl = 'https://api.github.com/repos/gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3/contents/data.json?ref=main&t=' + Date.now();
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', rawUrl, true);
-  xhr.setRequestHeader('Accept', 'application/vnd.github+json');
-  xhr.onload = function() {
-    if (xhr.status === 200) {
-      try {
-        var response = JSON.parse(xhr.responseText);
-        var file = response.content
-          ? JSON.parse(decodeURIComponent(escape(atob(response.content.replace(/\n/g, '')))))
-          : response;
-        var authenticated = false;
-
-        if (file.enc) {
-          /* novo formato: tenta descriptografar com a senha digitada */
-          try {
-            var dec = decryptData(file.enc, pwd);
-            JSON.parse(dec);  /* valida se o JSON resultante e valido */
-            authenticated = true;
-          } catch(e) { authenticated = false; }
-        } else if (file.pwd) {
-          /* formato legado com hash */
-          authenticated = (simpleHash(pwd) === file.pwd);
-        }
-
-        if (authenticated) {
-          sessionStorage.setItem(SESSION_KEY, '1');
-          sessionStorage.setItem(SESSION_KEY2, pwd);
-          var screen = document.getElementById('login-screen');
-          if (screen) screen.style.display = 'none';
-          if (err) err.textContent = '';
-          appInit();
-        } else {
-          if (err) err.textContent = 'Senha incorreta.';
-          var inp = document.getElementById('login-pwd');
-          if (inp) { inp.value = ''; inp.focus(); inp.style.borderColor = '#e53935'; setTimeout(function() { inp.style.borderColor = '#E5E7EB'; }, 1500); }
-        }
-      } catch(e) {
-        if (err) err.textContent = 'Erro ao verificar. Tente novamente.';
-      }
-    } else {
-      if (err) err.textContent = 'Erro de conexao. Verifique sua internet.';
-    }
-  };
-  xhr.onerror = function() { if (err) err.textContent = 'Sem conexao. Tente novamente.'; };
-  xhr.send();
+  fetch(API_BASE + '/api/session', {
+    method: 'POST',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pwd })
+  }).then(function(response) {
+    if (!response.ok) throw new Error(response.status === 401 ? 'Senha incorreta.' : 'Erro de conexao.');
+    return response.json();
+  }).then(function(result) {
+    if (!result.token) throw new Error('Sessao invalida.');
+    sessionStorage.setItem(SESSION_KEY, '1');
+    sessionStorage.setItem(SESSION_KEY2, pwd);
+    sessionStorage.setItem(API_TOKEN_KEY, result.token);
+    var screen = document.getElementById('login-screen');
+    if (screen) screen.style.display = 'none';
+    if (err) err.textContent = '';
+    appInit();
+  }).catch(function(error) {
+    if (err) err.textContent = error && error.message ? error.message : 'Sem conexao. Tente novamente.';
+    var inp = document.getElementById('login-pwd');
+    if (inp) { inp.value = ''; inp.focus(); inp.style.borderColor = '#e53935'; setTimeout(function() { inp.style.borderColor = '#E5E7EB'; }, 1500); }
+  });
 }
 
 function checkAuth() {
   if (sessionStorage.getItem(SESSION_KEY) === '1') {
     /* se a chave de criptografia sumiu (ex: aba nova), forca re-login */
-    if (!sessionStorage.getItem(SESSION_KEY2)) {
+    if (!sessionStorage.getItem(SESSION_KEY2) || !sessionStorage.getItem(API_TOKEN_KEY)) {
       sessionStorage.removeItem(SESSION_KEY);
       var inp2 = document.getElementById('login-pwd');
       if (inp2) setTimeout(function(){inp2.focus();}, 100);
@@ -1169,13 +1131,6 @@ var REASONS = [
 /* ===================================================================
    STATE
 =================================================================== */
-var cfg = {};
-try { cfg = JSON.parse(localStorage.getItem('pkg_gh_cfg') || '{}'); } catch(e) { cfg = {}; }
-if (!cfg.repo) cfg.repo = 'gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3';
-if (!cfg.file) cfg.file = 'data.json';
-// Save pre-filled defaults immediately so they persist
-localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
-
 var pkgs = [];
 try { pkgs = JSON.parse(localStorage.getItem('pkg_data') || '[]'); } catch(e) { pkgs = []; }
 
@@ -1195,24 +1150,18 @@ var chartReasons = null;
 var chartDrivers = null;
 
 /* ===================================================================
-   GITHUB API
+   API CENTRAL (CLOUDFLARE WORKER + D1)
 =================================================================== */
-function ghHeaders() {
+function apiHeaders() {
   return {
-    'Authorization': 'token ' + (cfg.token || ''),
-    'Accept': 'application/vnd.github.v3+json',
+    'Authorization': 'Bearer ' + (sessionStorage.getItem(API_TOKEN_KEY) || ''),
+    'Accept': 'application/json',
     'Content-Type': 'application/json'
   };
 }
 
-function ghUrl() {
-  return 'https://api.github.com/repos/' + (cfg.repo || '') + '/contents/' + (cfg.file || 'data.json');
-}
-
-function ghRawUrl() {
-  var repo = (cfg.repo || '').replace(/^\/+|\/+$/g, '');
-  var file = (cfg.file || 'data.json').replace(/^\/+/, '');
-  return 'https://api.github.com/repos/' + repo + '/contents/' + file + '?ref=main&t=' + Date.now();
+function apiDataUrl() {
+  return API_BASE + '/api/data';
 }
 
 function validateRemoteData(data) {
@@ -1382,17 +1331,11 @@ function storeAllLocalData() {
 
 function doSyncNow() {
   var key = sessionStorage.getItem(SESSION_KEY2) || '';
-  var hasToken = !!cfg.token;
-  var url = hasToken ? ghUrl() : ghRawUrl();
-  var options = hasToken ? { headers: ghHeaders(), cache: 'no-store' } : { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } };
   setSyncUI('spin');
-  return fetch(url, options)
+  return fetch(apiDataUrl(), { headers: apiHeaders(), cache: 'no-store' })
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
-      var file = f;
-      if (typeof f.content === 'string') {
-        file = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
-      }
+      var file = f.data;
       var data;
       if (file.enc && key) {
         data = JSON.parse(decryptData(file.enc, key));
@@ -1428,7 +1371,7 @@ function doSyncNow() {
       localStorage.setItem(SYNC_MIGRATION_KEY, '1');
       if (keepLocalChanges || retentionRemoved > 0) markRemoteDirty();
       refreshAll();
-      if (hasToken && isRemoteDirty()) {
+      if (isRemoteDirty()) {
         setSyncUI('spin');
         return saveGH().then(function() {
           clearRemoteDirty();
@@ -1440,7 +1383,7 @@ function doSyncNow() {
           return false;
         });
       }
-      setSyncUI(isRemoteDirty() ? 'pending' : (hasToken ? 'ok' : 'readonly'));
+      setSyncUI(isRemoteDirty() ? 'pending' : 'ok');
       return true;
     })
     .catch(function(e) {
@@ -1466,7 +1409,6 @@ function doSync() {
 }
 
 var AUTO_SYNC_WRITER_MS = 15000;
-var AUTO_SYNC_READER_MS = 120000;
 var autoSyncTimer = null;
 var autoSyncEventsReady = false;
 var lastAutoSyncAt = 0;
@@ -1474,7 +1416,7 @@ var lastAutoSyncAt = 0;
 function requestAutoSync(force) {
   if (sessionStorage.getItem(SESSION_KEY) !== '1') return;
   if (document.visibilityState && document.visibilityState !== 'visible') return;
-  var minimumInterval = cfg.token ? AUTO_SYNC_WRITER_MS : AUTO_SYNC_READER_MS;
+  var minimumInterval = AUTO_SYNC_WRITER_MS;
   if (force !== true && Date.now() - lastAutoSyncAt < minimumInterval) return;
   lastAutoSyncAt = Date.now();
   doSync();
@@ -1496,7 +1438,7 @@ function startAutoSync() {
 function showSaveError(msg) {
   var t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e53935;color:#fff;padding:12px 20px;border-radius:10px;font-size:0.85rem;font-weight:700;z-index:9999;max-width:320px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
-  t.textContent = msg || 'Erro ao salvar no GitHub';
+  t.textContent = msg || 'Erro ao salvar no banco central';
   document.body.appendChild(t);
   setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 5000);
 }
@@ -1506,11 +1448,10 @@ var saveQueue = Promise.resolve();
 function saveGHAttempt(retryCount) {
   var key = sessionStorage.getItem(SESSION_KEY2) || '';
   if (!key) return Promise.reject(new Error('Sessao expirada. Entre novamente.'));
-  return fetch(ghUrl(), { headers: ghHeaders(), cache: 'no-store' })
+  return fetch(apiDataUrl(), { headers: apiHeaders(), cache: 'no-store' })
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(f) {
-      var sha = f.sha;
-      var remoteFile = JSON.parse(decodeURIComponent(escape(atob(f.content.replace(/\n/g, '')))));
+      var remoteFile = f.data;
       var remoteData = remoteFile.enc ? JSON.parse(decryptData(remoteFile.enc, key)) : remoteFile;
       if (Array.isArray(remoteData)) remoteData = { pkgs: remoteData };
       validateRemoteData(remoteData);
@@ -1532,11 +1473,10 @@ function saveGHAttempt(retryCount) {
       var allData = { pkgs: pkgs, nexSessions: nexSessions, faltanteReg: faltanteReg, voandoReg: voandoStrip, deletedRecords: normalizeDeletedRecords(deletedRecords) };
       var jsonStr = JSON.stringify(allData);
       var fileObj = key ? { enc: encryptData(jsonStr, key) } : allData;
-      var encoded = btoa(unescape(encodeURIComponent(JSON.stringify(fileObj))));
-      return fetch(ghUrl(), {
+      return fetch(apiDataUrl(), {
         method: 'PUT',
-        headers: ghHeaders(),
-        body: JSON.stringify({ message: 'update ' + new Date().toISOString(), content: encoded, sha: sha })
+        headers: apiHeaders(),
+        body: JSON.stringify({ data: fileObj, revision: f.revision })
       });
     })
     .then(function(r) {
@@ -1547,7 +1487,7 @@ function saveGHAttempt(retryCount) {
 }
 
 function saveGH() {
-  if (!cfg.token) return Promise.reject(new Error('Token nao configurado. Dados salvos apenas neste dispositivo.'));
+  if (!sessionStorage.getItem(API_TOKEN_KEY)) return Promise.reject(new Error('Sessao expirada. Entre novamente.'));
   saveQueue = saveQueue.catch(function() {}).then(function() { return saveGHAttempt(0); });
   return saveQueue;
 }
@@ -1562,9 +1502,9 @@ function syncLocalChanges(errorPrefix) {
       return true;
     })
     .catch(function(e) {
-      if (!cfg.token) {
+      if (!sessionStorage.getItem(API_TOKEN_KEY)) {
         setSyncUI('pending');
-        showSaveError('Registro salvo neste aparelho, mas ainda nao enviado. Configure a gravacao nas configuracoes.');
+        showSaveError('Registro salvo neste aparelho. Entre novamente para enviar ao banco central.');
       } else {
         setSyncUI('err');
         showSaveError((errorPrefix || 'Erro ao salvar') + ': ' + (e && e.message ? e.message : 'verifique a conexao'));
@@ -1638,7 +1578,7 @@ function appInit() {
   // Update achados badge on load
   updateAchadosBadge();
 
-  // Sync with GitHub. Sem token, usa o arquivo publico em modo somente leitura.
+  // Sincronizacao central automatica em todos os dispositivos.
   doSync();
   startAutoSync();
 }
@@ -1694,9 +1634,8 @@ function triggerScan() {
 var pendingCameraRaw = null;
 
 function ensureWriteConfigured() {
-  if (cfg.token && cfg.writeValidated === true) return true;
-  showSaveError('Configure a gravacao antes de bipar. Nenhum pacote sera marcado como recebido sem acesso ao banco.');
-  openModal('cfgModal');
+  if (sessionStorage.getItem(API_TOKEN_KEY)) return true;
+  showSaveError('Sua sessao expirou. Entre novamente antes de bipar.');
   return false;
 }
 
@@ -2507,66 +2446,6 @@ function saveAddPending() {
 }
 
 /* ===================================================================
-   CONFIG
-=================================================================== */
-function saveCfg() {
-  var token = document.getElementById('cfg-token').value.trim();
-  var repo = document.getElementById('cfg-repo').value.trim();
-  var file = document.getElementById('cfg-file').value.trim() || 'data.json';
-  var status = document.getElementById('cfg-status');
-  var button = document.getElementById('cfg-save-btn');
-  if (!token || !repo) {
-    status.style.color = '#e53935';
-    status.textContent = 'Informe o token e o repositorio.';
-    return Promise.resolve(false);
-  }
-  status.style.color = '#6B7280';
-  status.textContent = 'Validando acesso de leitura e gravacao...';
-  button.disabled = true;
-  var hadPendingChanges = isRemoteDirty();
-  var testUrl = 'https://api.github.com/repos/' + repo + '/contents/' + file;
-  return fetch(testUrl, {
-    cache: 'no-store',
-    headers: {
-      'Authorization': 'Bearer ' + token,
-      'Accept': 'application/vnd.github+json'
-    }
-  }).then(function(r) {
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    cfg.token = token;
-    cfg.repo = repo;
-    cfg.file = file;
-    cfg.writeValidated = false;
-    localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
-    status.style.color = '#00a650';
-    status.textContent = 'Acesso validado. Sincronizando dados pendentes...';
-    return doSync();
-  }).then(function(ok) {
-    if (!ok) throw new Error('Falha ao sincronizar');
-    if (!hadPendingChanges || isRemoteDirty()) {
-      status.textContent = 'Confirmando permissao de gravacao...';
-      return saveGH().then(function() { clearRemoteDirty(); return true; });
-    }
-    return true;
-  }).then(function() {
-    cfg.writeValidated = true;
-    localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
-    closeModal('cfgModal');
-    showToast('✅ Gravação validada e sincronizada!', 's');
-    return true;
-  }).catch(function(e) {
-    cfg.writeValidated = false;
-    localStorage.setItem('pkg_gh_cfg', JSON.stringify(cfg));
-    status.style.color = '#e53935';
-    status.textContent = 'Acesso recusado. Verifique o token e a permissao Contents: Read and write. (' + (e && e.message ? e.message : 'erro') + ')';
-    return false;
-  }).then(function(result) {
-    button.disabled = false;
-    return result;
-  });
-}
-
-/* ===================================================================
    ANALYTICS
 =================================================================== */
 function initCharts() {
@@ -2744,11 +2623,6 @@ function exportCSV() {
 function openModal(id) {
   var el = document.getElementById(id);
   if (el) el.classList.add('open');
-  if (id === 'cfgModal') {
-    document.getElementById('cfg-token').value = cfg.token || '';
-    document.getElementById('cfg-repo').value  = cfg.repo  || 'gabrielspospoladori-rgb/RECEBIMENTO-LM-SES3';
-    document.getElementById('cfg-file').value  = cfg.file  || 'data.json';
-  }
 }
 function closeModal(id) {
   var el = document.getElementById(id);
