@@ -795,11 +795,11 @@ input,select,textarea{-webkit-appearance:none}
           <!-- Scan bar -->
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <input id="nexScanInput" type="text" placeholder="&#128230; Bipe ou digite o ID do pacote..." style="flex:1;min-width:180px;padding:9px 12px;border:2px solid #E5E7EB;border-radius:8px;font-size:0.85rem;font-weight:700;font-family:inherit" onkeydown="if(event.key==='Enter')addNexPackage()">
-            <label for="nexPhotoInput" style="background:#3483FA;color:#fff;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:900;cursor:pointer">📷 Foto do pacote</label>
+            <label for="nexPhotoInput" style="background:#3483FA;color:#fff;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:900;cursor:pointer">📷 Foto obrigatória</label>
             <input id="nexPhotoInput" type="file" accept="image/*" capture="environment" style="display:none" onchange="previewNexPhoto(this)">
             <button onclick="addNexPackage()" style="background:#1C1C1E;color:#FFE600;border:none;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:900;cursor:pointer;font-family:inherit">&#9889; Adicionar</button>
           </div>
-          <div id="nex-photo-preview" style="display:none;margin-top:8px;align-items:center;gap:8px"><img id="nex-photo-img" alt="Foto NEX" style="width:70px;height:55px;object-fit:cover;border-radius:6px;border:1px solid #E5E7EB"><span style="font-size:.7rem;color:#065f46;font-weight:700">Foto pronta para enviar</span></div>
+          <div id="nex-photo-preview" style="display:none;margin-top:8px;align-items:center;gap:8px"><img id="nex-photo-img" alt="Foto NEX" style="width:70px;height:55px;object-fit:cover;border-radius:6px;border:1px solid #E5E7EB"><span id="nex-photo-info" style="font-size:.7rem;color:#065f46;font-weight:700">Lendo código de barras...</span></div>
           <!-- Active session info -->
           <div id="nex-session-info" style="margin-top:10px;font-size:0.75rem;color:#6B7280"></div>
         </div>
@@ -3101,11 +3101,47 @@ var nexPendingPhoto = null;
 
 function previewNexPhoto(input) {
   if (!input.files || !input.files[0]) return;
-  compactPhotoFile(input.files[0], function(data) {
+  var file = input.files[0];
+  var info = document.getElementById('nex-photo-info');
+  if (info) { info.textContent = 'Lendo código de barras...'; info.style.color = '#6B7280'; }
+  compactPhotoFile(file, function(data) {
     nexPendingPhoto = data;
     document.getElementById('nex-photo-img').src = data;
     document.getElementById('nex-photo-preview').style.display = 'flex';
   });
+  decodeNexBarcodeFromPhoto(file);
+}
+
+function decodeNexBarcodeFromPhoto(file) {
+  var info = document.getElementById('nex-photo-info');
+  if (!window.ZXing) {
+    if (info) { info.textContent = 'Foto pronta. Digite o ID manualmente.'; info.style.color = '#d97706'; }
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var maxDim = 1600, w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      createPackageBarcodeReader().decodeFromCanvas(canvas).then(function(result) {
+        var id = normalizePackageId(result.getText());
+        document.getElementById('nexScanInput').value = id;
+        if (info) { info.textContent = 'Código identificado: ' + id; info.style.color = '#065f46'; }
+        if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+      }).catch(function() {
+        if (info) { info.textContent = 'Foto pronta. Código não identificado; digite o ID.'; info.style.color = '#d97706'; }
+      });
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function clearNexPhotoPreview() {
@@ -3153,6 +3189,12 @@ function addNexPackage() {
   var date = dateEl.value.trim();
 
   if (!pkgId) { scanEl.focus(); return; }
+  if (!nexPendingPhoto) {
+    var photoInfo = document.getElementById('nex-session-info');
+    if (photoInfo) { photoInfo.textContent = 'A foto do pacote é obrigatória para registrar no NEX.'; photoInfo.style.color = '#e53935'; }
+    document.getElementById('nexPhotoInput').click();
+    return;
+  }
   if (!agency) {
     agencyEl.style.borderColor = '#e53935';
     agencyEl.focus();
